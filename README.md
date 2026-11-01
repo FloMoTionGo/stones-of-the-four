@@ -2,7 +2,9 @@
 
 A roguelite take on 9×9 Go. You draw stones from a bag. Up to half of them are element stones (Fire, Water, Earth and Air), each bending the rules of Go in its own way across three tiers. The rest are plain Go stones. Beat three opponents in a row and upgrade your bag between matches.
 
-The whole game is one self-contained file, `index.html`. It needs no build step and has no dependencies beyond two Google Fonts, and it falls back to system fonts when offline.
+The whole game is one self-contained file, `index.html`. It needs no build step and has no dependencies beyond a few Google Fonts, and it falls back to system fonts when offline.
+
+It ships with two looks, switched with the **Look** button in the top bar and remembered in your browser: **Papercut**, the default, is layered dark cut paper with a red moon and burning ground behind the board; **Classic** is the slate frame and wooden board.
 
 ## Play
 

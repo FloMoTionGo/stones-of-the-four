@@ -7,7 +7,7 @@
 <title>Stones of the Four</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@600;800&family=Atkinson+Hyperlegible:wght@400;700&family=IBM+Plex+Mono:wght@500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@600;800&family=Atkinson+Hyperlegible:wght@400;700&family=IBM+Plex+Mono:wght@500&family=Nunito:ital,wght@0,700;0,900;1,900&family=Cabin:wght@500;600;700&display=swap">
 <style>
 /* Layout: the wooden board is the hero object; a quiet slate frame around it, side panels read like a scorer's notebook. */
 :root{
@@ -251,6 +251,72 @@ table.mix td.z{color:var(--line)}
   .offers{grid-template-columns:minmax(0,1fr)}
   .modal-panel{padding:16px}
 }
+
+/* ============================== Papercut Noir skin ============================== */
+/* Everything becomes layered dark paper: hard offset shadows, bone text, a red moon and burning ground behind the board. */
+:root[data-skin="papercut"]{
+  --bg:#07080c; --surface:#1a1e27; --surface-2:#232838; --fg:#e9e2d2; --muted:#a8a295; --line:#3a3f4d;
+  --fire:#ff5a36; --water:#8bc8ff; --earth:#9ad59a; --air:#b9c8dd; --good:#9ad59a; --bad:#ff5a36;
+  --wood-1:#2a2d38; --wood-2:#2a2d38; --grid:#5a5f70; --grain:#2a2d38;
+  --ink:#0a0b0f; --ink-hi:#0a0b0f; --bone:#e9e2d2; --bone-hi:#e9e2d2; --bone-lo:#9c927d;
+  --fire-l:#ff5a36; --fire-d:#d8352a; --water-l:#4a9ee6; --water-d:#145266;
+  --earth-l:#5fb86a; --earth-d:#1e4f30; --air-l:#b9c8dd; --air-d:#6f7f96;
+  --mark:#ffc46b; --danger:#d8352a; --ember:#ff5a36;
+  --font-display:"Nunito","Segoe UI",system-ui,sans-serif;
+  --font-body:"Cabin","Segoe UI",system-ui,sans-serif;
+  --sheet:0 5px 0 #000,0 16px 26px rgba(0,0,0,.75);
+  --sheet-deep:0 6px 0 #000,0 22px 36px rgba(0,0,0,.85);
+  --r:18px; color-scheme:dark;
+}
+[data-skin="papercut"] body{background:#07080c}
+[data-skin="papercut"] h1,[data-skin="papercut"] h2,[data-skin="papercut"] h3,[data-skin="papercut"] .brand,[data-skin="papercut"] .opp-id b{font-weight:900;font-style:italic;letter-spacing:.01em}
+[data-skin="papercut"] .app{position:relative;z-index:1}
+[data-skin="papercut"] .topbar{background:var(--surface);border:0;box-shadow:var(--sheet);
+  clip-path:polygon(0 0,100% 0,100% calc(100% - 8px),96% 100%,91% calc(100% - 7px),85% calc(100% - 2px),79% calc(100% - 8px),73% calc(100% - 1px),67% calc(100% - 6px),60% 100%,54% calc(100% - 7px),48% calc(100% - 2px),42% calc(100% - 8px),36% calc(100% - 1px),30% calc(100% - 6px),23% 100%,17% calc(100% - 7px),11% calc(100% - 2px),5% calc(100% - 8px),0 calc(100% - 3px));
+  padding-bottom:8px}
+[data-skin="papercut"] .lives i{background:var(--fg);box-shadow:0 2px 0 #000}
+[data-skin="papercut"] .lives i.lost{border-color:var(--bad);box-shadow:none}
+[data-skin="papercut"] .lives.last i{background:var(--bad)}
+[data-skin="papercut"] .btn{background:#2a3147;border:0;box-shadow:0 3px 0 #000;color:var(--fg)}
+[data-skin="papercut"] .btn:hover:not(:disabled){background:#343c57}
+[data-skin="papercut"] .btn.primary{background:#d8352a;color:#fff}
+[data-skin="papercut"] .btn.warn{background:#5a1612;color:var(--fg)}
+[data-skin="papercut"] .card,[data-skin="papercut"] .opp-strip,[data-skin="papercut"] .rung,[data-skin="papercut"] .panel,[data-skin="papercut"] .stat,[data-skin="papercut"] .result,[data-skin="papercut"] .node,[data-skin="papercut"] .tablewrap,[data-skin="papercut"] .modal-panel{border:0;box-shadow:var(--sheet)}
+[data-skin="papercut"] .offer{border:0;background:var(--surface-2);box-shadow:0 3px 0 #000}
+[data-skin="papercut"] .opp-strip{transform:rotate(.6deg);border-radius:14px}
+[data-skin="papercut"] .side .card:nth-child(1){transform:rotate(-.7deg)}
+[data-skin="papercut"] .side .card:nth-child(2){transform:rotate(.5deg);background:#12151c;
+  clip-path:polygon(0 6px,4% 0,9% 7px,15% 2px,21% 8px,27% 1px,33% 6px,40% 0,46% 7px,52% 2px,58% 8px,64% 1px,70% 6px,77% 0,83% 7px,89% 2px,95% 8px,100% 3px,100% 100%,0 100%);padding-top:22px;border-radius:0}
+[data-skin="papercut"] .status{background:var(--surface-2);box-shadow:var(--sheet);border-radius:14px;padding:10px 16px;transform:rotate(.3deg)}
+[data-skin="papercut"] .board-wrap{padding:14px;background:#1a1e27;border-radius:26px;box-shadow:var(--sheet-deep)}
+[data-skin="papercut"] .board-wrap::before{content:"";position:absolute;inset:14px -12px -14px 12px;background:#262b3a;border-radius:28px;box-shadow:0 5px 0 #000;z-index:0}
+[data-skin="papercut"] #board{position:relative;z-index:1;filter:none;border-radius:14px}
+[data-skin="papercut"] .hcard{border:0;background:var(--surface);box-shadow:var(--sheet);border-radius:16px;transition:transform .25s ease}
+[data-skin="papercut"] .hcard:nth-child(1){transform:rotate(-1.2deg)}
+[data-skin="papercut"] .hcard:nth-child(3){transform:rotate(1.4deg)}
+[data-skin="papercut"] .hcard.on{transform:translateY(-8px);box-shadow:0 0 0 2px #4a9ee6 inset,0 5px 0 #000,0 18px 26px rgba(74,158,230,.35)}
+[data-skin="papercut"] .hkey{font-family:var(--font-display);font-weight:900;font-size:.72rem;color:#07080c;background:var(--fg);border-radius:50%;width:20px;height:20px;display:inline-flex;align-items:center;justify-content:center;box-shadow:0 2px 0 #000;top:-6px;right:-6px}
+[data-skin="papercut"] .log li.s0::before{background:#0a0b0f;box-shadow:inset 0 0 0 1px #3a3f4d}
+[data-skin="papercut"] .log li.s1::before{background:var(--fg);border:0}
+[data-skin="papercut"] .scoregrid .tot{border-top-color:#3a3f4d}
+[data-skin="papercut"] .t0{background:repeating-linear-gradient(135deg,#3a3f4d 0 2px,transparent 2px 5px)} [data-skin="papercut"] .t1{background:#3a3f4d} [data-skin="papercut"] .t2{background:#6f7f96}
+[data-skin="papercut"] .modal{background:rgba(0,0,0,.7)}
+/* stones: flat paper discs with an offset shadow, scorch marks become flame tongues */
+.stone-sh,.sc-paper,.sc-glow,.board-fibre{display:none}
+[data-skin="papercut"] .stone-sh,[data-skin="papercut"] .sc-paper,[data-skin="papercut"] .sc-glow,[data-skin="papercut"] .board-fibre{display:inline}
+[data-skin="papercut"] .wood-grain,[data-skin="papercut"] .sc-classic{display:none}
+[data-skin="papercut"] .sc-n{fill:#e9e2d2}
+.fl{animation:flick .55s ease-in-out infinite alternate;transform-box:fill-box;transform-origin:center bottom}
+.gl{animation:glow .9s ease-in-out infinite alternate}
+@keyframes flick{from{transform:scaleY(.9) scaleX(1.05)}to{transform:scaleY(1.12) scaleX(.95)}}
+@keyframes glow{from{opacity:.3}to{opacity:.8}}
+/* scenery and paper texture, only in the skin */
+.scenery,.paper{display:none}
+[data-skin="papercut"] .scenery{display:block;position:fixed;inset:0;width:100%;height:100%;z-index:0;pointer-events:none}
+[data-skin="papercut"] .paper{display:block;position:fixed;inset:0;width:100%;height:100%;z-index:60;pointer-events:none}
+.paper.mottle{mix-blend-mode:multiply;opacity:.3}
+.paper.grain{mix-blend-mode:screen;opacity:.09}
+@media (prefers-reduced-motion: reduce){.fl,.gl{animation:none}}
 </style>
 </head>
 <body>
@@ -261,8 +327,29 @@ table.mix td.z{color:var(--line)}
     <radialGradient id="g-bone" cx="36%" cy="30%" r="78%"><stop offset="0" style="stop-color:var(--bone-hi)"/><stop offset=".65" style="stop-color:var(--bone)"/><stop offset="1" style="stop-color:var(--bone-lo)"/></radialGradient>
     <linearGradient id="g-wood" x1="0" y1="0" x2="1" y2="1"><stop offset="0" style="stop-color:var(--wood-1)"/><stop offset=".55" style="stop-color:var(--wood-2)"/><stop offset="1" style="stop-color:var(--wood-1)"/></linearGradient>
     <marker id="arrow" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" style="fill:var(--water-d)"/></marker>
+    <g id="flame"><path d="M0,0 C-16,-4 -18,-22 -9,-32 C-11,-20 -5,-16 -2,-20 C-8,-32 0,-42 3,-52 C4,-38 11,-33 10,-24 C15,-31 15,-38 12,-44 C22,-32 22,-10 8,0 Z" fill="#e8343c"/><path d="M0,0 C-10,-3 -12,-15 -5,-23 C-6,-14 -2,-12 0,-15 C-4,-23 1,-29 3,-36 C3,-27 8,-24 7,-17 C12,-22 12,-8 6,0 Z" fill="#f7a21b"/><path d="M0,0 C-5,-2 -6,-9 -3,-13 C-3,-8 0,-7 1,-9 C0,-14 2,-17 3,-21 C3,-16 5,-13 5,-9 C8,-5 6,-2 3,0 Z" fill="#f9d64f"/></g>
+    <g id="deadtree"><rect x="-3" y="-6" width="6" height="36" rx="2" fill="#000"/><path d="M0,-4 L-14,-22 M0,-10 L12,-26 M-7,-13 L-12,-26 M6,-18 L14,-14" stroke="#000" stroke-width="4" stroke-linecap="round" fill="none"/></g>
+    <filter id="grain" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="2" stitchTiles="stitch"/><feColorMatrix type="saturate" values="0"/></filter>
+    <filter id="mottle" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency=".012" numOctaves="4" seed="3" stitchTiles="stitch"/><feColorMatrix type="saturate" values="0"/><feComponentTransfer><feFuncA type="linear" slope="1.6" intercept="-.2"/></feComponentTransfer></filter>
+    <filter id="fibre" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency=".02 .7" numOctaves="2" seed="7"/><feColorMatrix type="saturate" values="0"/></filter>
+    <filter id="ember" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="4"/></filter>
   </defs>
 </svg>
+
+<!-- Papercut skin only: red moon, dead grove and burning ground behind everything, then the paper texture over everything -->
+<svg class="scenery" viewBox="0 0 1280 1040" opacity=".85" preserveAspectRatio="xMidYMax slice" aria-hidden="true" focusable="false">
+  <rect width="1280" height="1040" fill="#07080c"/>
+  <circle cx="1090" cy="120" r="92" fill="#b8231a"/><circle cx="1090" cy="120" r="70" fill="#d8352a"/>
+  <path d="M980,150 c0,-30 30,-52 62,-48 c14,-34 66,-40 90,-12 c30,-16 72,2 76,36 c30,2 50,22 46,50 L960,176 c-4,-12 4,-24 20,-26 Z" fill="#141821"/>
+  <path d="M1030,170 c0,-30 30,-52 62,-48 c14,-34 66,-40 90,-12 c30,-16 72,2 76,36 c30,2 50,22 46,50 L1010,196 c-4,-12 4,-24 20,-26 Z" fill="#1b2029"/>
+  <path d="M0,880 C180,830 300,845 440,880 C600,915 720,820 900,860 C1050,890 1180,840 1280,866 L1280,1040 L0,1040 Z" fill="#1e2a22"/>
+  <use href="#deadtree" transform="translate(60,872) scale(2.2)"/><use href="#deadtree" transform="translate(150,896) scale(1.5)"/><use href="#deadtree" transform="translate(1180,870) scale(2.4)"/><use href="#deadtree" transform="translate(1100,900) scale(1.6)"/><use href="#deadtree" transform="translate(640,862) scale(1.7)"/>
+  <path d="M0,920 C160,890 320,904 470,928 C640,955 760,885 950,912 C1090,932 1200,906 1280,916 L1280,1040 L0,1040 Z" fill="#141c17"/>
+  <g class="fl" opacity=".95"><use href="#flame" transform="translate(80,1000) scale(1.7)"/><use href="#flame" transform="translate(220,1006) scale(2.2) scale(-1,1)"/><use href="#flame" transform="translate(380,1002) scale(1.5)"/><use href="#flame" transform="translate(560,1008) scale(2)"/><use href="#flame" transform="translate(760,1004) scale(1.6) scale(-1,1)"/><use href="#flame" transform="translate(940,1010) scale(2.4)"/><use href="#flame" transform="translate(1120,1002) scale(1.7) scale(-1,1)"/><use href="#flame" transform="translate(1240,1008) scale(2)"/></g>
+  <path d="M0,1000 C120,990 240,998 360,1002 C520,1006 640,990 820,998 C1000,1004 1140,992 1280,1000 L1280,1040 L0,1040 Z" fill="#07080c"/>
+</svg>
+<svg class="paper mottle" aria-hidden="true" focusable="false"><rect width="100%" height="100%" filter="url(#mottle)"/></svg>
+<svg class="paper grain" aria-hidden="true" focusable="false"><rect width="100%" height="100%" filter="url(#grain)"/></svg>
 
 <div class="app">
   <header class="topbar"><div class="topbar-in" id="topbar"></div></header>
@@ -313,6 +400,12 @@ const OPPONENTS = [
 ];
 const MARKET_WEIGHTS = [[0.8, 0.2, 0], [0.55, 0.4, 0.05], [0.25, 0.5, 0.25]];
 const STORE_KEY = 'stones-of-the-four:v1';
+const SKIN_KEY = 'stones-of-the-four:skin';
+let skin = 'papercut';
+try { skin = localStorage.getItem(SKIN_KEY) || 'papercut'; } catch (e) { /* storage unavailable */ }
+function applySkin() { document.documentElement.dataset.skin = skin; }
+function toggleSkin() { skin = skin === 'papercut' ? 'classic' : 'papercut'; try { localStorage.setItem(SKIN_KEY, skin); } catch (e) { /* storage unavailable */ } applySkin(); renderTop(); }
+applySkin();
 
 /* ============================== geometry ============================== */
 const X = i => i % N, Y = i => (i / N) | 0, idx = (x, y) => y * N + x;
@@ -704,11 +797,12 @@ function pips(tier, col) {
   return xs.map(x => `<circle cx="${x}" cy="10.5" r="1.9" fill="${col}"/>`).join('');
 }
 function stoneSVG(el, tier, owner, extra = '') {
-  if (el === PLAIN) return `<circle r="19" fill="${owner === 0 ? 'url(#g-ink)' : 'url(#g-bone)'}" stroke="${owner === 0 ? 'var(--ink)' : 'var(--bone-lo)'}" stroke-width="1"/>` + extra;
+  const sh = `<circle class="stone-sh" r="19" cy="2.5" fill="${owner === 0 ? '#000' : 'var(--bone-lo)'}"/>`;
+  if (el === PLAIN) return sh + `<circle r="19" fill="${owner === 0 ? 'url(#g-ink)' : 'url(#g-bone)'}" stroke="${owner === 0 ? 'var(--ink)' : 'var(--bone-lo)'}" stroke-width="1"/>` + extra;
   const col = `var(--${el}-${owner === 0 ? 'l' : 'd'})`;
   const fill = owner === 0 ? 'url(#g-ink)' : 'url(#g-bone)';
   const edge = owner === 0 ? 'var(--ink)' : 'var(--bone-lo)';
-  return `<circle r="19" fill="${fill}" stroke="${edge}" stroke-width="1"/>` +
+  return sh + `<circle r="19" fill="${fill}" stroke="${edge}" stroke-width="1"/>` +
     (tier === 3 ? `<circle r="16.2" fill="none" stroke="${col}" stroke-width="1.1" opacity=".75"/>` : '') +
     glyph(el, col) + pips(tier, col) + extra;
 }
@@ -719,11 +813,13 @@ const glyphIcon = (el, size = 16) =>
 
 function boardStatic() {
   let s = `<rect x="0" y="0" width="${BS}" height="${BS}" rx="8" fill="url(#g-wood)"/>`;
+  s += `<clipPath id="boardclip"><rect width="${BS}" height="${BS}" rx="8"/></clipPath><rect class="board-fibre" width="${BS}" height="${BS}" clip-path="url(#boardclip)" filter="url(#fibre)" opacity=".07" style="mix-blend-mode:screen"/>`;
+  s += `<g class="wood-grain">`;
   for (let k = 0; k < 17; k++) {
     const y0 = 8 + k * 24 + (k % 3) * 4;
     s += `<path d="M0 ${y0} C ${BS * 0.3} ${y0 - 8 + (k % 5) * 3}, ${BS * 0.62} ${y0 + 9 - (k % 4) * 3}, ${BS} ${y0 + 2}" fill="none" stroke="var(--grain)" stroke-width="${0.6 + (k % 3) * 0.45}" opacity=".2"/>`;
   }
-  s += `<g stroke="var(--grid)" stroke-width="1" opacity=".85">`;
+  s += `</g><g stroke="var(--grid)" stroke-width="1" opacity=".85">`;
   for (let i = 0; i < N; i++) {
     const a = M + i * S, e = M + S * (N - 1);
     s += `<line x1="${M}" y1="${a}" x2="${e}" y2="${a}"/><line x1="${a}" y1="${M}" x2="${a}" y2="${e}"/>`;
@@ -748,9 +844,10 @@ function renderTop() {
   h += `<div class="runstat">`;
   if (run && screen !== 'title' && screen !== 'end') {
     h += `<span>Level <b class="num">${(m ? m.lv : run.level) + 1}</b> of 3</span>`;
-    h += `<span>Lives <span class="lives" aria-label="${run.lives} of ${LIVES} lives">${Array.from({ length: LIVES }, (_, i) => `<i class="${i < run.lives ? '' : 'lost'}"></i>`).join('')}</span></span>`;
+    h += `<span>Lives <span class="lives${run.lives === 1 ? ' last' : ''}" aria-label="${run.lives} of ${LIVES} lives">${Array.from({ length: LIVES }, (_, i) => `<i class="${i < run.lives ? '' : 'lost'}"></i>`).join('')}</span></span>`;
     h += `<span>Gold <b class="num">${run.gold}</b></span>`;
   }
+  h += `<button class="btn small" data-act="skin" aria-pressed="${skin === 'papercut'}" title="Switch the look between Papercut and Classic">Look: ${skin === 'papercut' ? 'Papercut' : 'Classic'}</button>`;
   h += `<button class="btn small" data-act="rules">Rules</button></div>`;
   $('#topbar').innerHTML = h;
 }
@@ -1013,7 +1110,9 @@ function updateMatch() {
   for (let p = 0; p < NN; p++) {
     const sc = m.s.scorch[p]; if (!sc) continue;
     sh += `<g transform="translate(${px(p)},${py(p)})"><circle r="14" fill="var(--ember)" opacity=".32"/><circle r="14" fill="none" stroke="${sc.owner === 0 ? 'var(--ink)' : 'var(--bone-hi)'}" stroke-width="1.4" stroke-dasharray="3 3"/>` +
-      `<path d="M0,-7 C4,-2 5,1 3,5 C1,8 -3,7 -4,4 C-5,1 -2,-1 -1,-4 C-1,-1 1,0 1,-2 Z" fill="var(--fire-d)" opacity=".9"/><text x="9" y="-6" font-size="9" font-family="IBM Plex Mono, monospace" fill="var(--grid)">${sc.left}</text></g>`;
+      `<path class="sc-classic" d="M0,-7 C4,-2 5,1 3,5 C1,8 -3,7 -4,4 C-5,1 -2,-1 -1,-4 C-1,-1 1,0 1,-2 Z" fill="var(--fire-d)" opacity=".9"/>` +
+      `<circle class="sc-glow gl" r="12" fill="var(--ember)" filter="url(#ember)" style="animation-delay:${(p % 5) * .17}s"/><g class="sc-paper fl" style="animation-delay:${(p % 4) * .13}s"><use href="#flame" transform="translate(0,12) scale(${p % 2 ? '.5' : '-.5,.5'})"/></g>` +
+      `<text class="sc-n" x="9" y="-6" font-size="9" font-family="IBM Plex Mono, monospace" fill="var(--grid)">${sc.left}</text></g>`;
   }
   $('#L-scorch').innerHTML = sh;
   // territory at end
@@ -1168,6 +1267,7 @@ document.addEventListener('click', e => {
   const el = e.target.closest('[data-act]'); if (!el) return;
   const act = el.dataset.act;
   if (act === 'rules') return openCodex();
+  if (act === 'skin') return toggleSkin();
   if (act === 'close-codex') return closeCodex();
   if (act === 'begin') { closeCodex(); return newRun(); }
   if (act === 'title') { clearTimeout(ui.aiTimer); screen = 'title'; m = null; if (run && (run.lives <= 0 || run.cleared[2])) run = null; return renderAll(); }
