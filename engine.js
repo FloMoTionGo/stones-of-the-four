@@ -153,7 +153,7 @@ function applyMove(s, owner, stone, p, koSig) {
   if (s.board[p]) return { ok: false, why: 'That point is taken.' };
   if (s.scorch[p] && s.scorch[p].owner !== owner) return { ok: false, why: 'That point is scorched. You can’t play there until the fire dies down.' };
   const t = cloneS(s), opp = 1 - owner, ev = newEv(), tier = stone.tier;
-  t.board[p] = { id: NEXT_ID++, owner, el: stone.el, tier, hp: stone.el === 'earth' ? tier : 0 };
+  t.board[p] = { id: NEXT_ID++, owner, el: stone.el, tier, hp: stone.el === 'earth' ? tier : 0, uid: stone.uid };
   t.scorch[p] = null;
   // 1. Clash: shatter one adjacent enemy stone of the element this one beats, of a strictly lower tier.
   const prey = isPlain(stone) ? null : ELEM[stone.el].beats; let best = -1;
@@ -280,7 +280,8 @@ function aiChoose(m, me = 1) {
 }
 
 /* ============================== match flow ============================== */
-function mkPile(list, m) { const p = { draw: shuffle(list.map(s => ({ el: s.el, tier: s.tier })), m), discard: [], hand: [] }; refill(p, m); return p; }
+// Stones keep their uid through the pile and onto the board, so a front end can give each one a stable look.
+function mkPile(list, m) { const p = { draw: shuffle(list.map((s, i) => ({ el: s.el, tier: s.tier, uid: s.uid ?? i + 1 })), m), discard: [], hand: [] }; refill(p, m); return p; }
 function refill(p, m) {
   while (p.hand.length < HAND) {
     if (!p.draw.length) { if (!p.discard.length) break; p.draw = shuffle(p.discard, m); p.discard = []; }
@@ -335,7 +336,7 @@ function matchFrom(lv, bags, seed) {
 }
 function newMatch(run, lv, seed) {
   if (seed === undefined) seed = mixSeed(run.seed, run.matchNo++);
-  const bags = [run.bag.map(s => ({ el: s.el, tier: s.tier })), bagFrom(OPPONENTS[lv].mix).map(s => ({ el: s.el, tier: s.tier }))];
+  const bags = [run.bag.map(s => ({ el: s.el, tier: s.tier, uid: s.uid })), bagFrom(OPPONENTS[lv].mix).map(s => ({ el: s.el, tier: s.tier, uid: s.uid }))];
   return matchFrom(lv, bags, seed);
 }
 

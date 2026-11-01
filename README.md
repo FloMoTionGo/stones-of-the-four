@@ -4,7 +4,7 @@ A roguelite take on 9×9 Go. You draw stones from a bag. Up to half of them are 
 
 The classic game is two files: `index.html` (the screens and the board) and `engine.js` (the rules). It needs no build step and has no dependencies beyond a few Google Fonts, and it falls back to system fonts when offline.
 
-There is also a second front end, the **Papercut Noir build** in `papercut/`: the same rules shown as a cut-paper diorama in 3D, with paper stones carrying generated emblems, lit by a red moon. See [papercut/PLAN.md](papercut/PLAN.md).
+There is also a second front end, the **Papercut Noir build** in `papercut/`: the same rules shown as a cut-paper diorama with an illusion of depth, a receding board, stones built from paper layers in three cuts per element, and scenery that drifts with the pointer. See [papercut/PLAN.md](papercut/PLAN.md).
 
 It ships with two looks, switched with the **Look** button in the top bar and remembered in your browser: **Papercut**, the default, is layered dark cut paper with a red moon and burning ground behind the board; **Classic** is the slate frame and wooden board.
 
@@ -76,7 +76,7 @@ Scorched points block the enemy and don't count as their liberties. Earth armor 
 ```
 index.html        the classic game: screens, SVG board, input, the two looks (HTML, CSS and JavaScript)
 engine.js         the rules: constants, geometry, captures, elements, scoring, the computer player, bags, the run and the shop
-papercut/         the Papercut Noir build: index.html, app.js (screens), scene.js (Three.js diorama), assets/models/*.glb, PLAN.md
+papercut/         the Papercut Noir build: index.html, app.js (screens), board.js (pseudo-3D board), stones.js (paper stones), tools/gallery.html, PLAN.md
 tests/            node --test tests/engine.test.mjs: determinism, replay and edge-rule contract
 tools/shot.mjs    headless Edge screenshot of any page in the repo (node tools/shot.mjs --url papercut/index.html --out shot.png)
 play.sh           local launcher with option parsing and --help
@@ -84,6 +84,6 @@ play.sh           local launcher with option parsing and --help
 
 Both front ends load `engine.js` and share every rule. The engine uses no `Math.random` inside a match: shuffles, the computer player's tie-break noise and the market draw from seeded streams, so a match replays from its seed and move log to the same board hash. The result screen's **Save move log** writes that JSON; `SOTF.replayLog(log)` replays it.
 
-To play the Papercut build, serve the folder (`./play.sh`) and open `http://127.0.0.1:8000/papercut/`. It needs a web server because it loads 3D models and ES modules, and it fetches Three.js from jsdelivr.
+To play the Papercut build, serve the folder (`./play.sh`) and open `http://127.0.0.1:8000/papercut/`. It needs a web server because it uses ES modules; it has no other dependencies beyond the Google Fonts.
 
 Your best result is kept in your browser's `localStorage`.

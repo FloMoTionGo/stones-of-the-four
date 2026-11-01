@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Stone gallery</title>
+<style>
+body{margin:0;background:#2a2d38;color:#e9e2d2;font:14px Cabin,"Segoe UI",sans-serif;padding:16px}
+h2{margin:18px 0 6px;font-size:14px;color:#a8a295;font-weight:700;text-transform:uppercase;letter-spacing:.1em}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+.row svg{background:#1a1e27;border-radius:10px}
+</style>
+</head>
+<body>
+<div id="out"></div>
+<script type="module">
+import { stoneSVG, EMBLEMS } from '../stones.js';
+const q = new URLSearchParams(location.search), squash = +(q.get('squash') || 1), size = +(q.get('size') || 120);
+const els = ['fire', 'water', 'earth', 'air', 'plain'];
+let h = '';
+for (const owner of [0, 1]) {
+  h += `<h2>${owner ? 'Opponent (bone)' : 'You (black card)'} · squash ${squash}</h2>`;
+  for (const el of els) {
+    h += '<div class="row">';
+    for (let v = 0; v < 3; v++) for (const tier of (el === 'plain' ? [0] : [1, 2, 3])) {
+      h += `<svg viewBox="-30 -36 60 66" width="${size}" height="${size * 1.1}">${stoneSVG({ el, tier, owner, variant: v, squash })}</svg>`;
+    }
+    h += '</div>';
+  }
+}
+h += '<h2>Ghosts</h2><div class="row">' + els.map(el => `<svg viewBox="-30 -36 60 66" width="${size}" height="${size * 1.1}">${stoneSVG({ el, tier: 2, owner: 0, variant: 1, squash, ghost: true })}</svg>`).join('') + '</div>';
+document.getElementById('out').innerHTML = h;
+window.__ready = true;
+</script>
+</body>
+</html>
