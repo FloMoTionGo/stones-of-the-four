@@ -362,44 +362,20 @@ table.mix td.z{color:var(--line)}
   </div>
 </div>
 
+<script src="engine.js"></script>
 <script>
 'use strict';
-/* ============================== constants ============================== */
-const N = 9, NN = N * N, MAX_TURNS = 30, KOMI = 2.5, HAND = 3, MIN_BAG = 6, LIVES = 2;
-const COLS = 'ABCDEFGHJ', ROMAN = ['', 'I', 'II', 'III'];
-const EL_ORDER = ['fire', 'water', 'earth', 'air'];
-const ELEM = {
-  fire:  { name: 'Fire',  beats: 'air'   },
-  water: { name: 'Water', beats: 'fire'  },
-  earth: { name: 'Earth', beats: 'water' },
-  air:   { name: 'Air',   beats: 'earth' },
-};
-const EFFECT = {
-  fire:  ['', 'Scorches the empty points next to it for 1 enemy turn.',
-              'Scorches the empty points next to it for 2 enemy turns.',
-              'Scorches adjacent and diagonal empty points for 2 enemy turns.'],
-  water: ['', 'Pushes adjacent enemy plain and tier I stones one point away.',
-              'Pushes adjacent enemy plain, tier I and tier II stones one point away.',
-              'Pushes any adjacent enemy stone up to two points away.'],
-  earth: ['', 'Its group survives 1 enemy turn after being surrounded.',
-              'Its group survives 2 enemy turns after being surrounded.',
-              'Its group survives 3 enemy turns after being surrounded.'],
-  air:   ['', 'Connects diagonally to your stones.',
-              'Connects diagonally and across a one-point jump.',
-              'Connects diagonally, across a jump, and at a knight’s move.'],
-};
-const PRICE = { up: { 1: 3, 2: 6 }, buy: { 1: 2, 2: 5, 3: 9 }, plain: 1, infuse: 3, tx: 2, rm: 1, reroll: 2 };
-// Plain stones: no element, tier 0. At most half of any bag may be element stones.
-const PLAIN = 'plain', SORT_ORDER = ['fire', 'water', 'earth', 'air', 'plain'];
-const PLAIN_TEXT = 'An ordinary Go stone with no element.';
-const START_MIX = { plain: 8, 1: 2 };
-const OPPONENTS = [
-  { name: 'Ren',    title: 'the Apprentice', mix: { plain: 8, 1: 2 }, blurb: 'Brings the same bag you start with: 8 plain stones and 8 tier I element stones.' },
-  { name: 'Mirela', title: 'the Adept',      mix: { plain: 8, 2: 2 }, blurb: '8 plain stones, and all 8 of her element stones are tier II.' },
-  { name: 'Ozu',    title: 'the Master',     mix: { plain: 8, 3: 2 }, blurb: '8 plain stones, and all 8 of his element stones are tier III.' },
-];
-const MARKET_WEIGHTS = [[0.8, 0.2, 0], [0.55, 0.4, 0.05], [0.25, 0.5, 0.25]];
+/* The rules live in engine.js (window.SOTF): constants, geometry, the rules, the computer player, piles, the run and the shop.
+   This file is the presentation: the SVG board, the screens, input, the opponent's thinking delay and the record in localStorage. */
+const { N, NN, MAX_TURNS, KOMI, LIVES, MIN_BAG, COLS, ROMAN, EL_ORDER, ELEM, EFFECT, PRICE, PLAIN, SORT_ORDER, PLAIN_TEXT, OPPONENTS,
+  X, Y, coord, applyMove, computeGroups, areaScore, koSig, diffFx, isPlain, stoneName, effectText, clashText, bagFrom, sortBag, elementCount, elementCap } = SOTF;
 const STORE_KEY = 'stones-of-the-four:v1';
+
+/* ============================== state ============================== */
+let run = null, m = null, screen = 'title';
+const ui = { sel: -1, hover: -1, cursor: 40, kbd: false, shopSel: null, flash: '', lastPointer: 'mouse', aiTimer: 0, passArm: 0 };
+
+// Look: the Papercut skin (default) or the Classic slate-and-wood board. Only CSS changes.
 const SKIN_KEY = 'stones-of-the-four:skin';
 let skin = 'papercut';
 try { skin = localStorage.getItem(SKIN_KEY) || 'papercut'; } catch (e) { /* storage unavailable */ }
@@ -407,377 +383,77 @@ function applySkin() { document.documentElement.dataset.skin = skin; }
 function toggleSkin() { skin = skin === 'papercut' ? 'classic' : 'papercut'; try { localStorage.setItem(SKIN_KEY, skin); } catch (e) { /* storage unavailable */ } applySkin(); renderTop(); }
 applySkin();
 
-/* ============================== geometry ============================== */
-const X = i => i % N, Y = i => (i / N) | 0, idx = (x, y) => y * N + x;
-const inb = (x, y) => x >= 0 && y >= 0 && x < N && y < N;
-const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
-const ORTH = [], DIAG = [], JUMP = [], KNIGHT = [], NEAR = [];
-const INFW = [0, 1.0, 0.5, 0.22];
-for (let i = 0; i < NN; i++) {
-  const x = X(i), y = Y(i);
-  const pick = list => list.filter(([dx, dy]) => inb(x + dx, y + dy)).map(([dx, dy]) => idx(x + dx, y + dy));
-  ORTH[i] = pick(DIRS);
-  DIAG[i] = pick([[1, 1], [1, -1], [-1, 1], [-1, -1]]);
-  JUMP[i] = pick([[2, 0], [-2, 0], [0, 2], [0, -2]]);
-  KNIGHT[i] = pick([[1, 2], [2, 1], [-1, 2], [-2, 1], [1, -2], [2, -1], [-1, -2], [-2, -1]]);
-  const near = [];
-  for (let dy = -3; dy <= 3; dy++) for (let dx = -3; dx <= 3; dx++) {
-    const d = Math.abs(dx) + Math.abs(dy);
-    if (d >= 1 && d <= 3 && inb(x + dx, y + dy)) near.push(idx(x + dx, y + dy), d);
-  }
-  NEAR[i] = near;
-}
-const stepD = (p, dx, dy) => { const x = X(p) + dx, y = Y(p) + dy; return inb(x, y) ? idx(x, y) : -1; };
-const coord = p => COLS[X(p)] + (N - Y(p));
-
-/* ============================== state ============================== */
-let run = null, m = null, screen = 'title';
-const ui = { sel: -1, hover: -1, cursor: 40, kbd: false, shopSel: null, flash: '', lastPointer: 'mouse', aiTimer: 0, passArm: 0 };
-let NEXT_ID = 1, UID = 1;
-
-const rnd = n => Math.floor(Math.random() * n);
-const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = rnd(i + 1); [a[i], a[j]] = [a[j], a[i]]; } return a; };
-const newStone = (el, tier) => ({ uid: UID++, el, tier });
-const isPlain = st => st.el === PLAIN;
-const stoneName = st => isPlain(st) ? 'Plain stone' : `${ELEM[st.el].name} ${ROMAN[st.tier]}`;
-const effectText = st => isPlain(st) ? PLAIN_TEXT : EFFECT[st.el][st.tier];
-const clashText = st => isPlain(st) ? 'Can\u2019t be shattered, but Water can push it.' : st.tier === 1 ? 'Too weak to shatter anything.' : `Shatters an adjacent ${ELEM[ELEM[st.el].beats].name} of tier ${st.tier === 2 ? 'I' : 'I or II'}.`;
-const bagFrom = mix => { const b = []; for (let k = 0; k < (mix.plain || 0); k++) b.push(newStone(PLAIN, 0)); for (const el of EL_ORDER) for (const t of [1, 2, 3]) for (let k = 0; k < (mix[t] || 0); k++) b.push(newStone(el, t)); return b; };
-const sortBag = bag => bag.slice().sort((a, b) => SORT_ORDER.indexOf(a.el) - SORT_ORDER.indexOf(b.el) || b.tier - a.tier);
-const elementCount = bag => bag.filter(s => !isPlain(s)).length;
-const elementCap = n => Math.floor(n / 2);
-
 function loadRecord() { try { return JSON.parse(localStorage.getItem(STORE_KEY)) || { best: 0, runsWon: 0 }; } catch (e) { return { best: 0, runsWon: 0 }; } }
 function saveRecord(r) { try { localStorage.setItem(STORE_KEY, JSON.stringify(r)); } catch (e) { /* storage unavailable */ } }
 
-/* ============================== rules engine ============================== */
-const cloneS = s => ({ board: s.board.map(c => c ? { ...c } : null), scorch: s.scorch.map(x => x ? { ...x } : null), captures: s.captures.slice() });
-const sig = board => board.map(c => c ? c.owner : '.').join('');
-const airT = c => (c && c.el === 'air') ? c.tier : 0;
-const newEv = () => ({ shatter: null, scorched: 0, pushed: 0, captured: 0, cracked: 0 });
-
-function computeGroups(s, owner) {
-  const b = s.board, sc = s.scorch, gid = new Int16Array(NN).fill(-1), groups = [];
-  for (let i = 0; i < NN; i++) {
-    const c = b[i];
-    if (!c || c.owner !== owner || gid[i] >= 0) continue;
-    const g = { stones: [], libs: 0 }, gi = groups.length, stack = [i];
-    gid[i] = gi;
-    while (stack.length) {
-      const j = stack.pop(); g.stones.push(j);
-      const aj = airT(b[j]);
-      const visit = (n, need) => {
-        const cn = b[n];
-        if (cn && cn.owner === owner && gid[n] < 0 && Math.max(aj, airT(cn)) >= need) { gid[n] = gi; stack.push(n); }
-      };
-      for (const n of ORTH[j]) visit(n, 0);
-      for (const n of DIAG[j]) visit(n, 1);
-      for (const n of JUMP[j]) visit(n, 2);
-      for (const n of KNIGHT[j]) visit(n, 3);
-    }
-    const libs = new Set();
-    for (const j of g.stones) for (const n of ORTH[j]) if (!b[n] && !(sc[n] && sc[n].owner !== owner)) libs.add(n);
-    g.libs = libs.size;
-    groups.push(g);
-  }
-  return { groups, gid };
-}
-
-// Victim groups without liberties crack their Earth armor or get captured. Groups that breathe regain armor.
-function resolveCaptures(t, victim, attacker, ev) {
-  const { groups } = computeGroups(t, victim);
-  for (const g of groups) {
-    const earth = g.stones.filter(j => t.board[j].el === 'earth');
-    if (g.libs === 0) {
-      const armor = earth.reduce((mx, j) => Math.max(mx, t.board[j].hp), 0);
-      if (armor > 0) { for (const j of earth) t.board[j].hp = Math.max(0, t.board[j].hp - 1); ev.cracked += g.stones.length; }
-      else { for (const j of g.stones) t.board[j] = null; t.captures[attacker] += g.stones.length; ev.captured += g.stones.length; }
-    } else {
-      for (const j of earth) t.board[j].hp = t.board[j].tier;
-    }
-  }
-}
-
-function applyMove(s, owner, stone, p, koSig) {
-  if (s.board[p]) return { ok: false, why: 'That point is taken.' };
-  if (s.scorch[p] && s.scorch[p].owner !== owner) return { ok: false, why: 'That point is scorched. You can’t play there until the fire dies down.' };
-  const t = cloneS(s), opp = 1 - owner, ev = newEv(), tier = stone.tier;
-  t.board[p] = { id: NEXT_ID++, owner, el: stone.el, tier, hp: stone.el === 'earth' ? tier : 0 };
-  t.scorch[p] = null;
-  // 1. Clash: shatter one adjacent enemy stone of the element this one beats, of a strictly lower tier.
-  const prey = isPlain(stone) ? null : ELEM[stone.el].beats; let best = -1;
-  for (const n of ORTH[p]) {
-    const c = t.board[n];
-    if (prey && c && c.owner === opp && c.el === prey && c.tier < tier && (best < 0 || c.tier > t.board[best].tier)) best = n;
-  }
-  if (best >= 0) { ev.shatter = { at: best, el: t.board[best].el, tier: t.board[best].tier }; t.board[best] = null; t.captures[owner]++; }
-  // 2. Element effect
-  if (stone.el === 'fire') {
-    const dur = tier === 1 ? 1 : 2, pts = tier === 3 ? ORTH[p].concat(DIAG[p]) : ORTH[p];
-    for (const q of pts) if (!t.board[q]) {
-      const cur = t.scorch[q];
-      if (!cur || cur.owner !== owner || cur.left < dur) { t.scorch[q] = { owner, left: dur }; ev.scorched++; }
-    }
-  } else if (stone.el === 'water') {
-    const reach = tier === 3 ? 2 : 1;
-    for (const [dx, dy] of DIRS) {
-      const n = stepD(p, dx, dy); if (n < 0) continue;
-      const c = t.board[n];
-      if (!c || c.owner !== opp || c.tier > tier) continue;
-      let cur = n;
-      for (let k = 0; k < reach; k++) { const nx = stepD(cur, dx, dy); if (nx < 0 || t.board[nx]) break; cur = nx; }
-      if (cur !== n) { t.board[cur] = c; t.board[n] = null; t.scorch[cur] = null; ev.pushed++; }
-    }
-  }
-  // 3. Captures
-  resolveCaptures(t, opp, owner, ev);
-  // 4. Legality: no suicide
-  const { groups, gid } = computeGroups(t, owner);
-  const g = groups[gid[p]];
-  if (!g || g.libs === 0) return { ok: false, why: 'That stone would have no liberties, so it can’t be played there.' };
-  for (const gg of groups) if (gg.libs > 0) for (const j of gg.stones) { const c = t.board[j]; if (c.el === 'earth') c.hp = c.tier; }
-  const sg = sig(t.board);
-  if (koSig && sg === koSig) return { ok: false, why: 'Ko: that would repeat the previous position. Play elsewhere first.' };
-  return { ok: true, s: t, ev, sig: sg };
-}
-
-function tickScorch(s, mover) {
-  for (let i = 0; i < NN; i++) {
-    const sc = s.scorch[i];
-    if (sc && sc.owner !== mover) { sc.left--; if (sc.left <= 0) s.scorch[i] = null; }
-    if (s.board[i]) s.scorch[i] = null;
-  }
-}
-
-function areaScore(s) {
-  const b = s.board, st = [0, 0], ter = [0, 0], own = new Int8Array(NN).fill(-1), seen = new Uint8Array(NN);
-  for (let i = 0; i < NN; i++) if (b[i]) st[b[i].owner]++;
-  for (let i = 0; i < NN; i++) {
-    if (b[i] || seen[i]) continue;
-    const region = [], stack = [i]; let mask = 0; seen[i] = 1;
-    while (stack.length) {
-      const j = stack.pop(); region.push(j);
-      for (const n of ORTH[j]) {
-        if (b[n]) mask |= (1 << b[n].owner);
-        else if (!seen[n]) { seen[n] = 1; stack.push(n); }
-      }
-    }
-    if (mask === 1 || mask === 2) { const o = mask === 1 ? 0 : 1; ter[o] += region.length; for (const j of region) own[j] = o; }
-  }
-  return { st, ter, own, total: [st[0] + ter[0], st[1] + ter[1] + KOMI] };
-}
-
-/* ============================== AI ============================== */
-// The same greedy one-move lookahead plays every level. Only the bag differs.
-function evaluate(s, me) {
-  const b = s.board, inf = new Float32Array(NN); let v = 0;
-  for (let i = 0; i < NN; i++) {
-    const c = b[i]; if (!c) continue;
-    const sg = c.owner === me ? 1 : -1; v += sg;
-    const near = NEAR[i];
-    for (let k = 0; k < near.length; k += 2) inf[near[k]] += sg * INFW[near[k + 1]];
-  }
-  for (let i = 0; i < NN; i++) if (!b[i]) { let x = inf[i] / 1.6; if (x > 1) x = 1; else if (x < -1) x = -1; v += x * 0.85; }
-  for (const side of [me, 1 - me]) {
-    const mine = side === me;
-    for (const g of computeGroups(s, side).groups) {
-      const n = g.stones.length;
-      if (g.libs === 0) v += mine ? -1.3 * n : 0.9 * n;
-      else if (g.libs === 1) v += mine ? -0.75 * n : 0.45 * n;
-      else if (g.libs === 2) v += mine ? -0.12 * n : 0.08 * n;
-    }
-  }
-  return v;
-}
-
-function aiChoose() {
-  const pile = m.piles[1], ko = koSig(), base = evaluate(m.s, 1);
-  const stonesOnBoard = m.s.board.reduce((n, c) => n + (c ? 1 : 0), 0);
-  let best = null; const seen = new Set();
-  pile.hand.forEach((st, hi) => {
-    const key = st.el + st.tier; if (seen.has(key)) return; seen.add(key);
-    for (let p = 0; p < NN; p++) {
-      if (m.s.board[p]) continue;
-      const r = applyMove(m.s, 1, st, p, ko); if (!r.ok) continue;
-      let v = evaluate(r.s, 1) + Math.random() * 0.3;
-      const x = X(p), y = Y(p);
-      if (stonesOnBoard < 14 && (x === 0 || y === 0 || x === N - 1 || y === N - 1)) v -= 0.6;
-      if (!best || v > best.v) best = { v, hi, p };
-    }
-  });
-  if (!best) return null;
-  const sc = areaScore(m.s), ahead = sc.total[1] > sc.total[0], gain = best.v - base;
-  if (m.passes === 1 && ahead && gain < 1.0) return null;
-  if (m.turn[1] >= 14 && gain < 0.35) return null;
-  return best;
-}
-
 /* ============================== match flow ============================== */
-function mkPile(bag) { const p = { draw: shuffle(bag.map(s => ({ ...s }))), discard: [], hand: [] }; refill(p); return p; }
-function refill(p) {
-  while (p.hand.length < HAND) {
-    if (!p.draw.length) { if (!p.discard.length) break; p.draw = shuffle(p.discard); p.discard = []; }
-    p.hand.push(p.draw.pop());
-  }
-}
-const koSig = () => m.history.length >= 2 ? m.history[m.history.length - 2] : null;
-const who = side => side === 0 ? 'You' : OPPONENTS[m.lv].name;
-const whose = side => side === 0 ? 'your' : `${OPPONENTS[m.lv].name}’s`;
-
-function addLog(side, text) { m.log.unshift({ side, text }); if (m.log.length > 60) m.log.pop(); }
-
-function evText(ev, side) {
-  const parts = [], plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
-  if (ev.shatter) parts.push(`shattered ${whose(1 - side)} ${ELEM[ev.shatter.el].name} ${ROMAN[ev.shatter.tier]}`);
-  if (ev.scorched) parts.push(`scorched ${plural(ev.scorched, 'point')}`);
-  if (ev.pushed) parts.push(`pushed ${plural(ev.pushed, 'stone')}`);
-  if (ev.captured) parts.push(`captured ${plural(ev.captured, 'stone')}`);
-  if (ev.cracked) parts.push(`${whose(1 - side)} surrounded group held on with Earth armor`);
-  return parts.length ? ': ' + parts.join(', ') : '';
-}
-
-function hasAnyLegal(side) {
-  const ko = koSig();
-  for (const st of m.piles[side].hand) for (let p = 0; p < NN; p++) if (!m.s.board[p] && applyMove(m.s, side, st, p, ko).ok) return true;
-  return false;
-}
-
-function diffFx(before, after, p) {
-  const apos = new Map(); after.board.forEach((c, i) => c && apos.set(c.id, i));
-  const removed = [], moved = [];
-  before.board.forEach((c, i) => {
-    if (!c) return;
-    if (!apos.has(c.id)) removed.push({ i, c });
-    else if (apos.get(c.id) !== i) moved.push({ id: c.id, from: i, to: apos.get(c.id) });
-  });
-  return { removed, moved, placed: p >= 0 && after.board[p] ? after.board[p].id : null };
-}
-
+// The engine moves the match along; this layer adds the opponent's thinking delay, the record and rendering.
 function startMatch(lv) {
-  const opp = OPPONENTS[lv];
-  m = {
-    lv, s: { board: Array(NN).fill(null), scorch: Array(NN).fill(null), captures: [0, 0] },
-    toMove: 0, turn: [0, 0], passes: 0, history: [], log: [], over: false, result: null, last: null, fx: null,
-    piles: [mkPile(run.bag), mkPile(bagFrom(opp.mix))],
-  };
-  m.history.push(sig(m.s.board));
-  addLog(-1, `Match ${lv + 1} against ${opp.name} ${opp.title}. You play first. ${opp.name} gets ${KOMI} komi.`);
+  m = SOTF.newMatch(run, lv);
   ui.sel = 0; ui.hover = -1; ui.passArm = 0;
   screen = 'match'; renderAll(); startTurn();
 }
-
 function startTurn() {
   if (!m || m.over) return;
-  if (m.turn[0] >= MAX_TURNS && m.turn[1] >= MAX_TURNS) return endMatch('turns');
-  const side = m.toMove;
-  if (m.turn[side] >= MAX_TURNS) { m.toMove = 1 - side; return startTurn(); }
-  if (!hasAnyLegal(side)) return doPass(side, true);
+  const side = SOTF.advance(m, run);
+  if (side === 'over') return finishMatch();
   updateMatch();
   if (side === 1) { clearTimeout(ui.aiTimer); ui.aiTimer = setTimeout(aiTurn, 650); }
 }
-
 function aiTurn() {
   if (!m || m.over || m.toMove !== 1 || screen !== 'match') return;
-  const c = aiChoose();
-  if (!c) doPass(1, false); else commit(1, c.hi, c.p);
+  const c = SOTF.aiChoose(m, 1);
+  if (!c) { SOTF.doPass(m, run, 1, false); ui.passArm = 0; } else SOTF.commit(m, 1, c.hi, c.p);
+  if (m.over) finishMatch(); else startTurn();
 }
-
-function commit(side, hi, p) {
-  const pile = m.piles[side], st = pile.hand[hi], before = m.s;
-  const r = applyMove(before, side, st, p, koSig());
+function playerMove(hi, p) {
+  const r = SOTF.commit(m, 0, hi, p);
   if (!r.ok) return r;
-  m.s = r.s; tickScorch(m.s, side);
-  m.history.push(r.sig); m.passes = 0; m.turn[side]++;
-  pile.hand.splice(hi, 1); pile.discard.push(st); refill(pile);
-  m.fx = diffFx(before, m.s, p);
-  m.last = { p };
-  addLog(side, `${who(side)} played ${stoneName(st)} at ${coord(p)}${evText(r.ev, side)}.`);
-  if (side === 0) {
-    ui.hover = -1;
-    const same = pile.hand.findIndex(h => h.el === st.el && h.tier === st.tier);
-    ui.sel = same >= 0 ? same : 0;
-  }
-  m.toMove = 1 - side; startTurn();
+  ui.hover = -1;
+  const same = m.piles[0].hand.findIndex(h => h.el === r.stone.el && h.tier === r.stone.tier);
+  ui.sel = same >= 0 ? same : 0;
+  startTurn();
   return r;
 }
-
-function doPass(side, forced) {
-  const before = m.s, t = cloneS(m.s), ev = newEv();
-  resolveCaptures(t, 1 - side, side, ev); tickScorch(t, side);
-  m.s = t; m.fx = diffFx(before, t, -1); m.last = null;
-  m.passes++; m.turn[side]++; m.history.push(sig(t.board));
-  addLog(side, `${who(side)} ${forced ? 'had no legal move and passed' : 'passed'}${evText(ev, side)}.`);
+function playerPass() {
+  SOTF.doPass(m, run, 0, false);
   ui.passArm = 0;
-  if (m.passes >= 2) return endMatch('passes');
-  m.toMove = 1 - side; startTurn();
+  if (m.over) finishMatch(); else startTurn();
 }
-
-function endMatch(reason) {
-  m.over = true; clearTimeout(ui.aiTimer);
-  const sc = areaScore(m.s), diff = sc.total[0] - sc.total[1], won = diff > 0, margin = Math.abs(diff);
-  const caps = m.s.captures[0];
-  const capGold = Math.floor(caps / 2);
-  const gold = won ? 12 + Math.min(12, Math.floor(margin)) + capGold : 6 + capGold;
-  m.result = { won, sc, margin, gold, caps, capGold, reason };
-  run.gold += gold; run.goldTotal += gold; run.captures += caps;
-  if (won) { run.cleared[m.lv] = true; run.wins++; } else { run.lives--; run.losses++; }
-  const rec = loadRecord(); const cleared = run.cleared.filter(Boolean).length;
+function finishMatch() {
+  clearTimeout(ui.aiTimer);
+  const rec = loadRecord(), cleared = run.cleared.filter(Boolean).length;
   if (cleared > rec.best) rec.best = cleared;
-  if (won && m.lv === 2) rec.runsWon++;
+  if (m.result.won && m.lv === 2) rec.runsWon++;
   saveRecord(rec);
-  addLog(-1, `Match over (${reason === 'passes' ? 'both players passed' : 'turn limit reached'}). ${won ? 'You win' : OPPONENTS[m.lv].name + ' wins'} by ${margin}.`);
   ui.hover = -1;
   renderAll();
+}
+// The seed, both bags and every move of this match as JSON: replays to the same board with SOTF.replayLog.
+function downloadLog() {
+  const log = SOTF.exportLog(m), a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(log, null, 1)], { type: 'application/json' }));
+  a.download = `stones-match-${log.lv + 1}-${log.seed}.json`; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 
 /* ============================== run / shop ============================== */
 function newRun() {
-  run = { level: 0, lives: LIVES, gold: 0, goldTotal: 0, bag: bagFrom(START_MIX), cleared: [false, false, false], market: [], wins: 0, losses: 0, captures: 0 };
+  run = SOTF.newRun(SOTF.randomSeed());
   ui.shopSel = null; ui.flash = '';
   startMatch(0);
 }
-function makeMarket() {
-  const w = MARKET_WEIGHTS[run.level];
-  run.market = Array.from({ length: 4 }, () => {
-    const r = Math.random(); const tier = r < w[0] ? 1 : r < w[0] + w[1] ? 2 : 3;
-    return newStone(EL_ORDER[rnd(4)], tier);
-  });
-}
 function afterMatch() {
-  const res = m.result;
-  if (res.won && m.lv === 2) { screen = 'end'; m = null; renderAll(); return; }
-  if (!res.won && run.lives <= 0) { screen = 'end'; m = null; renderAll(); return; }
-  if (res.won) run.level = m.lv + 1;
-  makeMarket(); ui.shopSel = null;
-  ui.flash = res.won ? `You earned ${res.gold} gold. Spend it before facing ${OPPONENTS[run.level].name}.` : `You earned ${res.gold} gold. Rework your bag and try ${OPPONENTS[run.level].name} again.`;
-  m = null; screen = 'shop'; renderAll();
+  const next = SOTF.afterMatch(run, m);
+  m = null; screen = next.screen; ui.shopSel = null; ui.flash = next.flash;
+  renderAll();
 }
-
-const roomToAdd = () => elementCount(run.bag) + 1 <= elementCap(run.bag.length + 1);
-const roomToInfuse = () => elementCount(run.bag) + 1 <= elementCap(run.bag.length);
-const canRemove = st => run.bag.length > MIN_BAG && elementCount(run.bag) - (isPlain(st) ? 0 : 1) <= elementCap(run.bag.length - 1);
-const freeSlots = () => elementCap(run.bag.length) - elementCount(run.bag);
-
+const roomToAdd = () => SOTF.roomToAdd(run), roomToInfuse = () => SOTF.roomToInfuse(run), canRemove = st => SOTF.canRemove(run, st);
 function shopAct(act, el) {
-  const st = run.bag.find(s => s.uid === ui.shopSel);
-  if (act === 'up' && st && !isPlain(st) && st.tier < 3 && run.gold >= PRICE.up[st.tier]) {
-    run.gold -= PRICE.up[st.tier]; st.tier++; ui.flash = `Carved it up to ${stoneName(st)}.`;
-  } else if (act === 'tx' && st && !isPlain(st) && st.el !== el.dataset.el && run.gold >= PRICE.tx) {
-    run.gold -= PRICE.tx; st.el = el.dataset.el; ui.flash = `Transmuted it into ${stoneName(st)}.`;
-  } else if (act === 'infuse' && st && isPlain(st) && roomToInfuse() && run.gold >= PRICE.infuse) {
-    run.gold -= PRICE.infuse; st.el = el.dataset.el; st.tier = 1; ui.flash = `Infused it into ${stoneName(st)}.`;
-  } else if (act === 'rm' && st && canRemove(st) && run.gold >= PRICE.rm) {
-    run.gold -= PRICE.rm; run.bag = run.bag.filter(s => s !== st); ui.shopSel = null; ui.flash = `Removed a ${stoneName(st)} from your bag.`;
-  } else if (act === 'plain' && run.gold >= PRICE.plain) {
-    run.gold -= PRICE.plain; const ns = newStone(PLAIN, 0); run.bag.push(ns); ui.shopSel = ns.uid;
-    const free = freeSlots();
-    ui.flash = `Added a plain stone. ${free ? `You have room for ${free} more element stone${free === 1 ? '' : 's'}.` : 'One more plain stone makes room for another element stone.'}`;
-  } else if (act === 'buy') {
-    const i = +el.dataset.i, o = run.market[i];
-    if (o && roomToAdd() && run.gold >= PRICE.buy[o.tier]) { run.gold -= PRICE.buy[o.tier]; run.bag.push(o); run.market[i] = null; ui.shopSel = o.uid; ui.flash = `Bought ${stoneName(o)}.`; }
-  } else if (act === 'reroll' && run.gold >= PRICE.reroll) {
-    run.gold -= PRICE.reroll; makeMarket(); ui.flash = 'The merchant laid out new stones.';
-  } else return;
+  const r = SOTF.shopAct(run, act, ui.shopSel, act === 'buy' ? el.dataset.i : el.dataset.el);
+  if (!r) return;
+  if (r.flash !== undefined) ui.flash = r.flash;
+  if ('sel' in r) ui.shopSel = r.sel;
   renderAll();
 }
 
@@ -1005,8 +681,8 @@ const canAct = () => m && !m.over && m.toMove === 0;
 function tryPlace(p) {
   if (!canAct()) return;
   if (ui.sel < 0) { setStatus('Pick a stone from your hand first.'); return; }
-  const r = commit(0, ui.sel, p);
-  if (r && !r.ok) setStatus(`<span class="why">${r.why}</span>`);
+  const r = playerMove(ui.sel, p);
+  if (!r.ok) setStatus(`<span class="why">${r.why}</span>`);
 }
 
 function onBoardKey(e) {
@@ -1053,7 +729,7 @@ function renderOverlay() {
   if (p < 0 || !m) { L.innerHTML = h; setStatus(defaultStatus()); return; }
   if (m.s.board[p] || m.over || m.toMove !== 0 || ui.sel < 0) { L.innerHTML = h; setStatus(m.s.board[p] || (m.s.scorch[p] && !m.over) ? statusFor(p) : defaultStatus()); return; }
   const st = m.piles[0].hand[ui.sel];
-  const r = applyMove(m.s, 0, st, p, koSig());
+  const r = applyMove(m.s, 0, st, p, koSig(m));
   if (!r.ok) {
     h += `<g transform="translate(${px(p)},${py(p)})" opacity=".85"><path d="M-7,-7 L7,7 M7,-7 L-7,7" stroke="var(--danger)" stroke-width="3" stroke-linecap="round"/></g>`;
     L.innerHTML = h; setStatus(`<span class="why">${r.why}</span>`); return;
@@ -1071,7 +747,7 @@ function renderOverlay() {
   for (const rm of fx.removed) h += `<g transform="translate(${px(rm.i)},${py(rm.i)})"><circle r="20" fill="none" stroke="var(--danger)" stroke-width="2.5"/><path d="M-9,-9 L9,9 M9,-9 L-9,9" stroke="var(--danger)" stroke-width="3" stroke-linecap="round"/></g>`;
   h += `<g transform="translate(${px(p)},${py(p)})" class="ghost">${stoneSVG(st.el, st.tier, 0)}</g>`;
   L.innerHTML = h;
-  const parts = evText(r.ev, 0);
+  const parts = SOTF.evText(m, r.ev, 0);
   setStatus(`<b class="el-${st.el}">${stoneName(st)}</b> at ${coord(p)}${parts || ': no special effect here'}.`);
 }
 
@@ -1163,7 +839,7 @@ function resultHTML() {
     : (run.lives > 0 ? `You lose a life. ${run.lives} left, and you get a rematch.` : 'That was your last life.');
   return `<div class="result" role="status"><h2>${head}</h2><p>${sub}</p>
     <p class="gold">+${r.gold} gold <span class="meta" style="font-weight:400">(${r.won ? `12 for the win, ${Math.min(12, Math.floor(r.margin))} for the margin` : '6 for playing'}, ${r.capGold} for ${r.caps} captures)</span></p>
-    <div class="row"><button class="btn primary" data-act="${next}">${label}</button></div></div>`;
+    <div class="row"><button class="btn primary" data-act="${next}">${label}</button><button class="btn small" data-act="log">Save move log</button></div></div>`;
 }
 
 /* ============================== shop rendering ============================== */
@@ -1274,11 +950,12 @@ document.addEventListener('click', e => {
   if (act === 'hand') { ui.sel = +el.dataset.i; return updateMatch(); }
   if (act === 'pass') {
     if (!canAct()) return;
-    if (ui.passArm && Date.now() - ui.passArm < 4000) return doPass(0, false);
+    if (ui.passArm && Date.now() - ui.passArm < 4000) return playerPass();
     ui.passArm = Date.now(); updateMatch(); setStatus('Passing ends the match if your opponent also passes. Press <b>Confirm pass</b> to pass.');
     setTimeout(() => { if (ui.passArm && Date.now() - ui.passArm >= 4000) { ui.passArm = 0; if (canAct()) updateMatch(); } }, 4100);
     return;
   }
+  if (act === 'log') return downloadLog();
   if (act === 'to-shop') return afterMatch();
   if (act === 'to-end') return afterMatch();
   if (act === 'sel') { ui.shopSel = +el.dataset.uid; ui.flash = ''; return renderAll(); }
@@ -1294,13 +971,13 @@ document.addEventListener('keydown', e => {
 });
 
 /* ============================== boot ============================== */
-window.claude?.hot?.snapshot?.(() => ({ run, m, screen, ids: { NEXT_ID, UID } }));
+window.claude?.hot?.snapshot?.(() => ({ run, m, screen, ids: SOTF.ids() }));
 function start(data) {
   if (data && data.screen && data.run) {
     run = data.run; m = data.m; screen = data.screen;
-    if (data.ids) { NEXT_ID = data.ids.NEXT_ID; UID = data.ids.UID; }
+    if (data.ids) SOTF.ids(data.ids);
     if (screen === 'match' && !m) screen = 'shop';
-    if (screen === 'shop' && !run.market.length) makeMarket();
+    if (screen === 'shop' && !run.market.length) SOTF.makeMarket(run);
     renderAll();
     if (screen === 'match' && m && !m.over && m.toMove === 1) ui.aiTimer = setTimeout(aiTurn, 650);
     return;
