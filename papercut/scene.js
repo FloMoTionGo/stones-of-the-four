@@ -104,7 +104,14 @@ export async function createScene(canvas) {
   /* ---- emblems from the generated models ---- */
   const loader = new GLTFLoader();
   const protos = {}, emblemMats = {};
-  await Promise.all(Object.keys(EMBLEM).map(el => new Promise((res, rej) => loader.load(`./assets/models/${el}.glb`, g => {
+  // Models come from assets/models/*.glb, or from window.__models (base64 GLBs) where a host serves no .glb files.
+  const loadModel = (el, onLoad, onError) => {
+    const b64 = window.__models && window.__models[el];
+    if (!b64) return loader.load(`./assets/models/${el}.glb`, onLoad, undefined, onError);
+    const bin = atob(b64), buf = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+    loader.parse(buf.buffer, '', onLoad, onError);
+  };
+  await Promise.all(Object.keys(EMBLEM).map(el => new Promise((res, rej) => loadModel(el, g => {
     const cfg = EMBLEM[el], inner = g.scene; inner.rotation.set(...cfg.rot);
     const wrap = new THREE.Group(); wrap.add(inner);
     const box = new THREE.Box3().setFromObject(wrap), size = box.getSize(new THREE.Vector3()), k = cfg.h / size.y;
@@ -116,7 +123,7 @@ export async function createScene(canvas) {
     const mk = (color, ghost) => { const m = base.clone(); m.roughness = 0.9; m.metalness = 0; m.color.setHex(color); if (ghost) { m.transparent = true; m.opacity = 0.5; m.depthWrite = false; } return m; };
     emblemMats[el] = { me: mk(0xffffff, false), them: mk(0x8f96a8, false), meGhost: mk(0xffffff, true), themGhost: mk(0x8f96a8, true) };
     protos[el] = holder; res();
-  }, undefined, rej))));
+  }, rej))));
   const emblem = (el, owner, ghost) => { const e = protos[el].clone(); const mat = emblemMats[el][(owner ? 'them' : 'me') + (ghost ? 'Ghost' : '')]; e.traverse(o => { if (o.isMesh) { o.material = mat; o.castShadow = !ghost; o.receiveShadow = true; } }); return e; };
 
   function makeStone(el, tier, owner, ghost = false) {

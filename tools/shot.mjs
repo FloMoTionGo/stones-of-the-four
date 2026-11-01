@@ -1,5 +1,6 @@
 // Headless screenshot of a page in this repo, via Microsoft Edge and the DevTools protocol. No dependencies.
-//   node tools/shot.mjs --url papercut/index.html --out shot.png   (no leading slash: Git Bash would turn it into a Windows path) [--w 1280 --h 900] [--ready "window.__ready"] [--eval "js"] [--timeout 30000]
+//   node tools/shot.mjs --url papercut/index.html --out shot.png   (no leading slash: Git Bash would turn it into a Windows path)
+//   --root <dir> serves another folder instead of the repo root. [--w 1280 --h 900] [--ready "window.__ready"] [--eval "js"] [--timeout 30000]
 // Serves the repo root on a free port, opens the page, waits for the --ready expression to be truthy, runs --eval
 // (JSON result printed), captures a PNG and prints console messages and page errors.
 import { spawn } from 'node:child_process';
@@ -10,7 +11,7 @@ import { join, extname, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const args = Object.fromEntries(process.argv.slice(2).reduce((a, v, i, arr) => { if (v.startsWith('--')) a.push([v.slice(2), arr[i + 1] && !arr[i + 1].startsWith('--') ? arr[i + 1] : true]); return a; }, []));
-const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const ROOT = args.root ? resolve(String(args.root)) : resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const EDGE = 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe';
 const W = +(args.w || 1280), H = +(args.h || 900), TIMEOUT = +(args.timeout || 30000);
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.glb': 'model/gltf-binary', '.json': 'application/json', '.svg': 'image/svg+xml', '.woff2': 'font/woff2' };
