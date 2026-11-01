@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Stones of the Four, the Papercut Noir build: a cut-paper diorama lit by a red moon, with real paper stones on a 9x9 board.">
+<title>Stones of the Four</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:ital,wght@0,700;0,800;0,900;1,900&family=Cabin:wght@500;600;700&display=swap">
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"}}</script>
+<style>
+/* Papercut Noir. Everything the player sees is cut paper on a dark table: the 3D diorama holds the board, the stones, the bag's
+   worth of scenery and the light; the HTML sheets hold words and numbers. Palette and type come from the canvas artboard. */
+:root{
+  --night:#07080c; --card:#1a1e27; --card-2:#232838; --card-3:#262b3a; --card-deep:#12151c; --slate:#2a3147;
+  --bone:#e9e2d2; --ash:#a8a295; --ink:#0a0b0f; --ink-hi:#3a3f4d;
+  --moon:#d8352a; --ember:#ff5a36; --blood:#5a1612;
+  --fire:#f7a21b; --fire-hi:#f9d64f; --fire-lo:#e8343c; --water:#4a9ee6; --water-hi:#8bc8ff; --earth:#5fb86a; --earth-hi:#9ad59a; --air:#b9c8dd; --air-lo:#6f7f96;
+  --display:Nunito,"Segoe UI",system-ui,sans-serif; --body:Cabin,"Segoe UI",system-ui,sans-serif;
+  --hud-right:330px;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{height:100%}
+body{margin:0;background:var(--night);color:var(--bone);font-family:var(--body);font-size:15px;line-height:1.45;overflow:hidden}
+button{font:inherit;color:inherit}
+h1,h2,h3{margin:0;font-family:var(--display);font-weight:900;font-style:italic;line-height:1.1}
+p{margin:0}
+a{color:var(--water-hi)}
+:focus-visible{outline:3px solid var(--bone);outline-offset:3px}
+.display{font-family:var(--display);font-weight:900;font-style:italic}
+.label{font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:var(--ash)}
+.num{font-family:var(--display);font-weight:900;font-style:normal;font-variant-numeric:tabular-nums}
+.el-fire{color:var(--fire)} .el-water{color:var(--water-hi)} .el-earth{color:var(--earth-hi)} .el-air{color:var(--air)} .el-plain{color:var(--ash)}
+
+/* the cut-paper vocabulary: sheets with a hard black drop, torn edges, a tag with a punched corner */
+.sheet{background:var(--card);box-shadow:0 5px 0 #000,0 16px 26px rgba(0,0,0,.75);border-radius:18px}
+.sheet.deep{box-shadow:0 6px 0 #000,0 22px 36px rgba(0,0,0,.85)}
+.torn{border-radius:0;clip-path:polygon(0 6px,4% 0,9% 7px,15% 2px,21% 8px,27% 1px,33% 6px,40% 0,46% 7px,52% 2px,58% 8px,64% 1px,70% 6px,77% 0,83% 7px,89% 2px,95% 8px,100% 3px,100% 100%,0 100%)}
+.tag{border-radius:0;clip-path:polygon(0 18px,18px 0,100% 0,100% 100%,0 100%)}
+.backed{position:relative}
+.backed::before{content:"";position:absolute;inset:10px -8px -10px 8px;background:var(--blood);border-radius:20px;box-shadow:0 4px 0 #000;z-index:-1}
+.backed.slate::before{background:var(--card-3)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:0;border-radius:999px;padding:9px 18px;cursor:pointer;
+  font-family:var(--display);font-weight:900;font-style:italic;font-size:15px;color:var(--bone);background:var(--slate);box-shadow:0 3px 0 #000;white-space:nowrap}
+.btn:hover:not(:disabled){filter:brightness(1.15)}
+.btn:active:not(:disabled){transform:translateY(2px);box-shadow:0 1px 0 #000}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.blood{background:var(--blood)}
+.btn.bone{background:var(--bone);color:var(--night)}
+.btn.small{padding:6px 13px;font-size:13px}
+.btn.quiet{font-family:var(--body);font-style:normal;font-weight:700;font-size:13px;text-transform:uppercase;letter-spacing:.1em;padding:6px 14px}
+
+/* the stage */
+#stage{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;outline:0}
+#stage:focus-visible{outline:0}
+#stage.focus-ring{box-shadow:inset 0 0 0 3px var(--bone)}
+.overlay{position:fixed;inset:0;pointer-events:none;z-index:2}
+.overlay > *{pointer-events:auto}
+.grain,.mottle{position:fixed;inset:0;width:100%;height:100%;z-index:40;pointer-events:none}
+.mottle{mix-blend-mode:multiply;opacity:.28}
+.grain{mix-blend-mode:screen;opacity:.08}
+
+/* HUD: header sheet, right column, status, hand labels, bag */
+#header{position:absolute;top:18px;left:0;right:0;margin:0 auto;width:fit-content;transform:rotate(-.6deg);padding:16px 26px 12px;display:flex;flex-wrap:wrap;gap:8px 22px;align-items:center;justify-content:center;max-width:min(96vw,980px)}
+#header h1{font-size:24px;letter-spacing:.01em}
+.dots{display:inline-flex;gap:6px;align-items:center}
+.dot{width:16px;height:16px;border-radius:50%;background:var(--slate);box-shadow:0 2px 0 #000;display:inline-block}
+.dot.done{background:#1e4f30}
+.dot.now{background:var(--moon);outline:3px solid var(--bone);outline-offset:2px}
+.life{width:14px;height:14px;border-radius:50%;background:var(--bone);display:inline-block}
+.life.lost{background:none;border:2px solid var(--ember)}
+.last-life{color:var(--ember)}
+#right{position:absolute;top:104px;right:22px;width:var(--hud-right);display:flex;flex-direction:column;gap:16px;max-height:calc(100vh - 290px)}
+#opp{padding:12px 14px 12px 22px;display:flex;gap:12px;align-items:center;transform:rotate(.8deg);position:relative;flex:none}
+#opp::after{content:"";position:absolute;left:10px;top:10px;width:10px;height:10px;border-radius:50%;background:var(--night);box-shadow:inset 0 1px 2px rgba(0,0,0,.8)}
+#opp img{width:50px;height:50px;flex:none}
+#opp .name{font-size:20px}
+#opp .warn{font-weight:700;font-size:12px;color:var(--ember)}
+.opphand{display:flex;gap:4px;margin-top:3px}
+.opphand img{width:28px;height:28px}
+#score{transform:rotate(-.7deg);flex:none}
+#score .in{padding:12px 16px 12px}
+#score h2{font-size:16px;margin-bottom:6px}
+.scoregrid{display:grid;grid-template-columns:1fr auto auto;gap:1px 12px;font-weight:500;font-size:13px;line-height:1.3;align-items:center}
+.scoregrid .h{text-align:right;font-size:12px;text-transform:uppercase;letter-spacing:.1em;font-weight:700;color:var(--ash)}
+.scoregrid .h.them{color:var(--ember)}
+.scoregrid .v{text-align:right}
+.scoregrid .tot{font-family:var(--display);font-weight:900;font-style:italic;font-size:17px;padding-top:6px}
+.scoregrid .badge{font-family:var(--display);font-weight:900;font-size:19px;text-align:right;border-radius:12px;padding:1px 10px;line-height:1.3}
+.badge.me{background:var(--ink);color:var(--bone);box-shadow:inset 0 0 0 1px var(--ink-hi)}
+.badge.them{background:var(--bone);color:var(--night)}
+.scoregrid .quiet{color:var(--ash)}
+.scoregrid .hot{color:var(--ember)}
+#logsheet{background:var(--card-deep);padding:20px 18px 14px;transform:rotate(.5deg);min-height:110px;flex:1 1 auto;display:flex;flex-direction:column;overflow:hidden}
+#logsheet h2{font-size:16px;margin-bottom:6px;flex:none}
+#log{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:500;line-height:1.35;overflow-y:auto;flex:1 1 auto;min-height:0;scrollbar-width:thin}
+#log li{display:flex;gap:8px;align-items:flex-start}
+#log li span{flex:1 1 auto;min-width:0}
+#log li::before{content:"";flex:none;width:10px;height:10px;border-radius:50%;margin-top:5px;background:var(--ink);box-shadow:inset 0 0 0 1px var(--ink-hi)}
+#log li.s1{color:var(--ash)}
+#log li.s1::before{background:var(--bone);box-shadow:none}
+#log li.sys{color:var(--ash)}
+#log li.sys::before{background:none;box-shadow:none}
+#log b{color:var(--ember)}
+#passrow{display:flex;gap:10px;align-items:center;flex:none}
+#status{position:absolute;left:24px;bottom:120px;max-width:min(520px,calc(100vw - var(--hud-right) - 70px));padding:12px 18px;background:var(--card-2);border-radius:18px;font-weight:500;transform:rotate(.4deg);box-shadow:0 4px 0 #000,0 12px 20px rgba(0,0,0,.6)}
+#status::before{content:"";position:absolute;top:-10px;left:40px;width:20px;height:20px;background:var(--card-2);transform:rotate(45deg);border-radius:3px}
+#status b{font-weight:700}
+#status .why{color:var(--ember);font-weight:700}
+#status .think{color:var(--ash);font-style:italic}
+#hand{position:absolute;inset:0;pointer-events:none}
+.hbtn{position:absolute;left:0;top:0;pointer-events:auto;display:flex;align-items:center;gap:7px;padding:4px 12px 4px 5px;border:0;border-radius:999px;background:var(--card);box-shadow:0 3px 0 #000;cursor:pointer;white-space:nowrap;visibility:hidden}
+.hbtn.on{background:var(--card-3);box-shadow:0 3px 0 #000,0 0 0 2px var(--bone)}
+.hbtn .k{flex:none;width:22px;height:22px;border-radius:50%;background:var(--bone);color:var(--night);font-family:var(--display);font-weight:900;font-size:12px;display:flex;align-items:center;justify-content:center}
+.hbtn .n{font-family:var(--display);font-weight:900;font-style:italic;font-size:13px;line-height:1.1}
+#bagbox{position:absolute;right:64px;bottom:14px;display:flex;flex-direction:column;align-items:center;gap:4px}
+#bagbox svg{width:126px;height:144px;display:block;transform-origin:50% 12%;animation:sway 2.6s ease-in-out infinite alternate}
+#bagbox .label{text-align:center;font-size:11px}
+#bagbox.jiggle svg{animation:jiggle .5s ease-out 1, sway 2.6s ease-in-out .5s infinite alternate}
+@keyframes sway{from{transform:rotate(-2deg)}to{transform:rotate(2deg)}}
+@keyframes jiggle{0%{transform:rotate(0) translateY(0)}30%{transform:rotate(-7deg) translateY(-6px)}60%{transform:rotate(5deg)}100%{transform:rotate(0)}}
+
+/* full screens: sheets over the dimmed diorama */
+.scrim{position:fixed;inset:0;background:rgba(7,8,12,.62);z-index:3;display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;padding:36px 20px 48px}
+.panel{width:100%;max-width:880px;padding:26px 30px 28px;display:grid;gap:18px}
+.panel h1{font-size:clamp(30px,5vw,46px)}
+.panel .lede{max-width:62ch;font-size:16px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.ladder{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.rung{background:var(--card-2);border-radius:14px;padding:12px 14px;display:grid;gap:4px;box-shadow:0 3px 0 #000}
+.rung h3{font-size:16px}
+.rung p{color:var(--ash);font-size:13px}
+.record{color:var(--ash);font-size:14px}
+#result{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) rotate(-.6deg);width:min(520px,calc(100vw - 40px));padding:24px 26px;display:grid;gap:10px}
+#result h2{font-size:28px}
+#result .gold{font-family:var(--display);font-weight:900;font-size:22px;color:var(--fire-hi)}
+#result .meta{color:var(--ash);font-size:13px}
+
+/* shop */
+.shop-grid{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:18px;align-items:start}
+.pane{background:var(--card-2);border-radius:16px;padding:16px;display:grid;gap:12px;box-shadow:0 4px 0 #000}
+.pane h2{font-size:19px}
+.pane-h{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.meta{color:var(--ash);font-size:13px}
+.bagrow{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.bagrow .rowlbl{width:58px;font-family:var(--display);font-weight:900;font-style:italic;font-size:14px}
+.chip{border:0;background:none;padding:2px;border-radius:50%;cursor:pointer;line-height:0}
+.chip img{width:40px;height:40px;display:block}
+.chip:hover{filter:brightness(1.2)}
+.chip.on{box-shadow:0 0 0 3px var(--bone)}
+.bench{border-top:2px dashed var(--ink-hi);padding-top:12px;display:grid;gap:10px}
+.bench-top{display:flex;gap:12px;align-items:center}
+.bench-top img{width:52px;height:52px}
+.bench h3{font-size:17px}
+.acts{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.flash{font-size:14px;color:var(--earth-hi);font-weight:700;min-height:1.3em}
+.offers{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.offer{background:var(--card);border-radius:14px;padding:12px;display:grid;gap:6px;box-shadow:0 3px 0 #000}
+.offer .top{display:flex;align-items:center;gap:10px;font-family:var(--display);font-weight:900;font-style:italic}
+.offer img{width:40px;height:40px}
+.offer p{font-size:12px;color:var(--ash)}
+.offer.empty{align-items:center;justify-content:center;color:var(--ash);font-size:13px;min-height:110px;text-align:center}
+table.mix{border-collapse:collapse;font-size:13px;width:100%}
+table.mix th,table.mix td{padding:3px 6px;text-align:center}
+table.mix thead th{font-size:11px;color:var(--ash);text-transform:uppercase;letter-spacing:.08em}
+table.mix td:first-child,table.mix th:first-child{text-align:left}
+table.mix .sep{border-left:1px solid var(--ink-hi)}
+table.mix td.z{color:var(--ink-hi)}
+.path{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.node{display:flex;align-items:center;gap:8px;padding:6px 12px;border-radius:999px;background:var(--card-2);font-size:13px;box-shadow:0 3px 0 #000}
+.node.next{box-shadow:0 3px 0 #000,0 0 0 2px var(--bone)}
+.node.done{opacity:.7}
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.stat{background:var(--card-2);border-radius:14px;padding:10px 12px;box-shadow:0 3px 0 #000}
+.stat small{display:block;color:var(--ash);font-size:11px;text-transform:uppercase;letter-spacing:.1em;font-weight:700}
+.stat b{font-family:var(--display);font-weight:900;font-size:24px}
+
+/* codex */
+.codex{display:grid;gap:18px;font-size:14px}
+.codex ul{margin:0;padding-left:1.1em;display:grid;gap:6px;max-width:70ch}
+.codex h3{font-size:16px;margin-bottom:6px}
+.cycle{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.cycle div{display:grid;justify-items:center;gap:2px;font-size:12px;text-align:center}
+.cycle img{width:48px;height:48px}
+.tablewrap{overflow-x:auto;border-radius:12px;background:var(--card-2);box-shadow:0 3px 0 #000}
+table.tiers{border-collapse:collapse;width:100%;min-width:620px;font-size:13px}
+table.tiers th,table.tiers td{padding:8px 10px;border-bottom:1px solid var(--ink-hi);text-align:left;vertical-align:top}
+table.tiers tr:last-child td{border-bottom:0}
+table.tiers thead th{font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--ash)}
+table.tiers td.elname{white-space:nowrap;font-family:var(--display);font-weight:900;font-style:italic}
+.elcell{display:flex;align-items:center;gap:8px}
+.elcell img{width:28px;height:28px}
+#loading{position:fixed;inset:0;z-index:60;display:grid;place-items:center;background:var(--night);color:var(--ash);font-family:var(--display);font-weight:900;font-style:italic;font-size:20px;transition:opacity .5s}
+#loading.off{opacity:0;pointer-events:none}
+
+@media (max-width:1100px){
+  :root{--hud-right:280px}
+  #log{max-height:150px}
+}
+@media (max-width:900px){
+  #right{position:static;width:auto;max-height:none;flex-direction:row;flex-wrap:wrap;padding:90px 16px 0;gap:12px}
+  #right > *{flex:1 1 260px}
+  #logsheet{display:none}
+  #status{bottom:120px;max-width:calc(100vw - 48px)}
+  #bagbox{right:16px;bottom:16px}
+  .shop-grid{grid-template-columns:minmax(0,1fr)}
+  .ladder,.stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media (prefers-reduced-motion:reduce){#bagbox svg{animation:none}}
+</style>
+</head>
+<body>
+<div id="loading">Cutting the paper…</div>
+<canvas id="stage" tabindex="0" aria-label="Go board, 9 by 9. Arrow keys move the cursor, Enter places the selected stone, 1 to 3 pick a stone from your hand."></canvas>
+
+<!-- match HUD -->
+<div class="overlay" id="hud" hidden>
+  <div id="header" class="sheet torn"></div>
+  <aside id="right">
+    <div id="opp" class="sheet tag"></div>
+    <div id="score" class="backed"><div class="sheet in" id="score-in"></div></div>
+    <div id="logsheet" class="sheet torn"><h2>Match log</h2><ol id="log"></ol></div>
+    <div id="passrow"></div>
+  </aside>
+  <div id="status" role="status" aria-live="polite"></div>
+  <div id="hand" role="group" aria-label="Your hand"></div>
+  <div id="bagbox">
+    <svg viewBox="0 0 150 170" role="img" aria-label="Your bag">
+      <path d="M28,166 C4,166 2,120 14,92 C24,70 46,62 52,52 L98,52 C104,62 126,70 136,92 C148,120 146,166 122,166 Z" fill="#000"/>
+      <path d="M26,160 C2,160 0,114 12,86 C22,64 44,56 50,46 L96,46 C102,56 124,64 134,86 C146,114 144,160 120,160 Z" fill="#1a1e27"/>
+      <path d="M40,120 C36,140 48,154 70,156 C56,146 50,134 52,118 Z" fill="#262b3a"/>
+      <path d="M46,46 C56,38 60,30 62,18 L84,18 C86,30 90,38 100,46 Z" fill="#232838"/>
+      <path d="M44,50 L102,50" stroke="#d8352a" stroke-width="6" stroke-linecap="round"/>
+      <path d="M104,52 c10,4 14,14 8,22 c-4,-6 -8,-10 -8,-22 Z" fill="#d8352a"/>
+      <circle cx="62" cy="20" r="9" fill="#e9e2d2"/><circle cx="80" cy="16" r="9" fill="#0a0b0f" stroke="#3a3f4d" stroke-width="1"/><circle cx="95" cy="24" r="8" fill="#e9e2d2"/>
+      <g transform="translate(73,106) rotate(-6)"><path d="M-30,-22 L-26,-26 L30,-24 L32,20 L28,24 L-30,22 Z" fill="#000"/><path d="M-30,-26 L-26,-30 L30,-28 L32,16 L28,20 L-30,18 Z" fill="#e9e2d2"/><text id="bagcount" y="6" text-anchor="middle" font-family="Nunito, sans-serif" font-weight="900" font-style="italic" font-size="30" fill="#07080c">0</text></g>
+    </svg>
+    <span class="label">In the bag · reshuffles when empty</span>
+  </div>
+  <div id="result" class="sheet deep" hidden></div>
+</div>
+
+<!-- screens -->
+<div id="screen" class="scrim" hidden></div>
+<div id="codex" class="scrim" hidden>
+  <div class="sheet deep panel" role="dialog" aria-modal="true" aria-labelledby="codex-title" style="transform:rotate(.4deg)">
+    <div class="pane-h"><h1 id="codex-title" style="font-size:28px">How to play</h1><button class="btn small" data-act="close-codex" id="codex-close">Close</button></div>
+    <div id="codex-body"></div>
+  </div>
+</div>
+
+<!-- paper: mottling and a lifted fine grain over everything, including the diorama -->
+<svg class="mottle" aria-hidden="true"><filter id="mottle" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency=".012" numOctaves="4" seed="3" stitchTiles="stitch"/><feColorMatrix type="saturate" values="0"/><feComponentTransfer><feFuncA type="linear" slope="1.6" intercept="-.2"/></feComponentTransfer></filter><rect width="100%" height="100%" filter="url(#mottle)"/></svg>
+<svg class="grain" aria-hidden="true"><filter id="grain" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="2" stitchTiles="stitch"/><feColorMatrix type="saturate" values="0"/></filter><rect width="100%" height="100%" filter="url(#grain)"/></svg>
+
+<script src="../engine.js"></script>
+<script type="module" src="./app.js"></script>
+</body>
+</html>
