@@ -48,8 +48,7 @@ const cleanup = async () => {
     await new Promise(r => { const k = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(ps, 'utf16le').toString('base64')], { stdio: 'ignore' }); k.on('exit', r); k.on('error', r); });
   } else { try { edge.kill(); } catch {} }
   server.close();
-  await new Promise(r => setTimeout(r, 300));
-  await rm(profile, { recursive: true, force: true }).catch(() => {});
+  for (const wait of [300, 1200, 2500]) { await new Promise(r => setTimeout(r, wait)); if (await rm(profile, { recursive: true, force: true }).then(() => true, () => false)) break; }
 };
 for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(sig, () => cleanup().then(() => process.exit(130)));
 try {
