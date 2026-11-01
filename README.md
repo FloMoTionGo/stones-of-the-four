@@ -1,6 +1,6 @@
 # Stones of the Four
 
-A roguelite take on 9×9 Go. You draw Fire, Water, Earth and Air stones from a bag, each element bends the rules of Go in its own way, and each comes in three tiers. Beat three opponents in a row and upgrade your bag between matches.
+A roguelite take on 9×9 Go. You draw stones from a bag. Up to half of them are element stones (Fire, Water, Earth and Air), each bending the rules of Go in its own way across three tiers. The rest are plain Go stones. Beat three opponents in a row and upgrade your bag between matches.
 
 The whole game is one self-contained file, `index.html`. It needs no build step and has no dependencies beyond two Google Fonts, and it falls back to system fonts when offline.
 
@@ -25,21 +25,22 @@ You can also just double-click `index.html`.
 
 ## How a run works
 
-1. You start with 16 tier I stones, four of each element.
+1. You start with 16 stones: 8 plain stones and 8 tier I element stones, two of each element.
 2. You face three opponents in order: **Ren the Apprentice**, **Mirela the Adept** and **Ozu the Master**. They all use the same computer player. The only difference is their bag:
 
    | Opponent | Bag |
    |---|---|
-   | Ren | 16× tier I (same as yours) |
-   | Mirela | 4× tier I, 12× tier II |
-   | Ozu | 4× tier II, 12× tier III |
+   | Ren | 8 plain, 8× tier I element (same as yours) |
+   | Mirela | 8 plain, 8× tier II element |
+   | Ozu | 8 plain, 8× tier III element |
 
-3. After each match you earn gold and visit **the Stonecutter**, where you can upgrade a stone's tier, transmute its element, remove it, or buy new stones from a market.
+3. After each match you earn gold and visit **the Stonecutter**, where you can upgrade an element stone's tier, transmute its element, infuse a plain stone with an element, add plain stones, remove stones, or buy element stones from a market.
 4. You have 2 lives. A loss costs one, and you rematch the same opponent after shopping.
 
 ## Rules
 
 - On your turn, play one of the 3 stones in your hand on an empty point, then draw back up to 3. Used stones are reshuffled when the bag runs out.
+- **At most half of every bag can be element stones.** The rest are plain stones: ordinary Go stones with no element. Plain stones can't be shattered, but Water can push them. Every 2 plain stones you add make room for 1 more element stone.
 - Normal Go capture rules apply: a group with no liberties is captured, suicide is illegal, and ko applies.
 - Each side gets 30 turns. Two passes in a row also end the match.
 - Area scoring is used, and the opponent, who moves second, gets 2.5 komi.
@@ -53,7 +54,7 @@ Fire beats Air, Air beats Earth, Earth beats Water and Water beats Fire. Place a
 | | Tier I | Tier II | Tier III |
 |---|---|---|---|
 | **Fire** | Scorches adjacent empty points for 1 enemy turn | …for 2 enemy turns | Adjacent and diagonal points, 2 enemy turns |
-| **Water** | Pushes adjacent enemy tier I stones 1 point | Pushes enemy stones up to tier II | Pushes any enemy stone up to 2 points |
+| **Water** | Pushes adjacent enemy plain and tier I stones 1 point | Pushes enemy plain, tier I and tier II stones | Pushes any enemy stone up to 2 points |
 | **Earth** | Its group survives 1 enemy turn when surrounded | 2 enemy turns | 3 enemy turns |
 | **Air** | Connects diagonally | + across a one-point jump | + at a knight's move |
 

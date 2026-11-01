@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="description" content="A roguelite take on 9x9 Go with Fire, Water, Earth and Air stones.">
+<meta name="description" content="A roguelite take on 9x9 Go with plain stones and Fire, Water, Earth and Air stones.">
 <title>Stones of the Four</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -44,7 +44,7 @@ button{font:inherit;color:inherit}
 h1,h2,h3{font-family:var(--font-display);font-weight:800;text-wrap:balance;margin:0;line-height:1.15}
 p{margin:0}
 .num{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
-.el-fire{color:var(--fire)} .el-water{color:var(--water)} .el-earth{color:var(--earth)} .el-air{color:var(--air)}
+.el-fire{color:var(--fire)} .el-water{color:var(--water)} .el-earth{color:var(--earth)} .el-air{color:var(--air)} .el-plain{color:var(--fg)}
 :focus-visible{outline:2px solid var(--mark);outline-offset:2px}
 
 /* top bar */
@@ -90,7 +90,7 @@ p{margin:0}
 .rung p{color:var(--muted);font-size:.9rem}
 .tierbar{display:flex;height:10px;border-radius:5px;overflow:hidden;background:var(--surface-2);margin-top:auto}
 .tierbar span{display:block;height:100%}
-.t1{background:var(--line)} .t2{background:var(--muted)} .t3{background:var(--fg)}
+.t0{background:repeating-linear-gradient(135deg,var(--line) 0 2px,transparent 2px 5px)} .t1{background:var(--line)} .t2{background:var(--muted)} .t3{background:var(--fg)}
 .tierkey{display:flex;gap:12px;font-size:.78rem;color:var(--muted);flex-wrap:wrap}
 .tierkey i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:4px;vertical-align:-1px}
 
@@ -291,8 +291,8 @@ const EFFECT = {
   fire:  ['', 'Scorches the empty points next to it for 1 enemy turn.',
               'Scorches the empty points next to it for 2 enemy turns.',
               'Scorches adjacent and diagonal empty points for 2 enemy turns.'],
-  water: ['', 'Pushes adjacent enemy tier I stones one point away.',
-              'Pushes adjacent enemy stones up to tier II one point away.',
+  water: ['', 'Pushes adjacent enemy plain and tier I stones one point away.',
+              'Pushes adjacent enemy plain, tier I and tier II stones one point away.',
               'Pushes any adjacent enemy stone up to two points away.'],
   earth: ['', 'Its group survives 1 enemy turn after being surrounded.',
               'Its group survives 2 enemy turns after being surrounded.',
@@ -301,11 +301,15 @@ const EFFECT = {
               'Connects diagonally and across a one-point jump.',
               'Connects diagonally, across a jump, and at a knight’s move.'],
 };
-const PRICE = { up: { 1: 3, 2: 6 }, buy: { 1: 2, 2: 5, 3: 9 }, tx: 2, rm: 1, reroll: 2 };
+const PRICE = { up: { 1: 3, 2: 6 }, buy: { 1: 2, 2: 5, 3: 9 }, plain: 1, infuse: 3, tx: 2, rm: 1, reroll: 2 };
+// Plain stones: no element, tier 0. At most half of any bag may be element stones.
+const PLAIN = 'plain', SORT_ORDER = ['fire', 'water', 'earth', 'air', 'plain'];
+const PLAIN_TEXT = 'An ordinary Go stone with no element.';
+const START_MIX = { plain: 8, 1: 2 };
 const OPPONENTS = [
-  { name: 'Ren',    title: 'the Apprentice', mix: { 1: 4 },       blurb: 'Carries the same plain tier I stones you start with.' },
-  { name: 'Mirela', title: 'the Adept',      mix: { 1: 1, 2: 3 }, blurb: 'Mostly tier II stones, with one tier I of each element.' },
-  { name: 'Ozu',    title: 'the Master',     mix: { 2: 1, 3: 3 }, blurb: 'Three tier III stones of every element, backed by tier II.' },
+  { name: 'Ren',    title: 'the Apprentice', mix: { plain: 8, 1: 2 }, blurb: 'Brings the same bag you start with: 8 plain stones and 8 tier I element stones.' },
+  { name: 'Mirela', title: 'the Adept',      mix: { plain: 8, 2: 2 }, blurb: '8 plain stones, and all 8 of her element stones are tier II.' },
+  { name: 'Ozu',    title: 'the Master',     mix: { plain: 8, 3: 2 }, blurb: '8 plain stones, and all 8 of his element stones are tier III.' },
 ];
 const MARKET_WEIGHTS = [[0.8, 0.2, 0], [0.55, 0.4, 0.05], [0.25, 0.5, 0.25]];
 const STORE_KEY = 'stones-of-the-four:v1';
@@ -341,10 +345,14 @@ let NEXT_ID = 1, UID = 1;
 const rnd = n => Math.floor(Math.random() * n);
 const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = rnd(i + 1); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 const newStone = (el, tier) => ({ uid: UID++, el, tier });
-const stoneName = st => `${ELEM[st.el].name} ${ROMAN[st.tier]}`;
-const clashText = st => st.tier === 1 ? 'Too weak to shatter anything.' : `Shatters an adjacent ${ELEM[ELEM[st.el].beats].name} of tier ${st.tier === 2 ? 'I' : 'I or II'}.`;
-const bagFrom = mix => { const b = []; for (const el of EL_ORDER) for (const t of [1, 2, 3]) for (let k = 0; k < (mix[t] || 0); k++) b.push(newStone(el, t)); return b; };
-const sortBag = bag => bag.slice().sort((a, b) => EL_ORDER.indexOf(a.el) - EL_ORDER.indexOf(b.el) || b.tier - a.tier);
+const isPlain = st => st.el === PLAIN;
+const stoneName = st => isPlain(st) ? 'Plain stone' : `${ELEM[st.el].name} ${ROMAN[st.tier]}`;
+const effectText = st => isPlain(st) ? PLAIN_TEXT : EFFECT[st.el][st.tier];
+const clashText = st => isPlain(st) ? 'Can\u2019t be shattered, but Water can push it.' : st.tier === 1 ? 'Too weak to shatter anything.' : `Shatters an adjacent ${ELEM[ELEM[st.el].beats].name} of tier ${st.tier === 2 ? 'I' : 'I or II'}.`;
+const bagFrom = mix => { const b = []; for (let k = 0; k < (mix.plain || 0); k++) b.push(newStone(PLAIN, 0)); for (const el of EL_ORDER) for (const t of [1, 2, 3]) for (let k = 0; k < (mix[t] || 0); k++) b.push(newStone(el, t)); return b; };
+const sortBag = bag => bag.slice().sort((a, b) => SORT_ORDER.indexOf(a.el) - SORT_ORDER.indexOf(b.el) || b.tier - a.tier);
+const elementCount = bag => bag.filter(s => !isPlain(s)).length;
+const elementCap = n => Math.floor(n / 2);
 
 function loadRecord() { try { return JSON.parse(localStorage.getItem(STORE_KEY)) || { best: 0, runsWon: 0 }; } catch (e) { return { best: 0, runsWon: 0 }; } }
 function saveRecord(r) { try { localStorage.setItem(STORE_KEY, JSON.stringify(r)); } catch (e) { /* storage unavailable */ } }
@@ -404,10 +412,10 @@ function applyMove(s, owner, stone, p, koSig) {
   t.board[p] = { id: NEXT_ID++, owner, el: stone.el, tier, hp: stone.el === 'earth' ? tier : 0 };
   t.scorch[p] = null;
   // 1. Clash: shatter one adjacent enemy stone of the element this one beats, of a strictly lower tier.
-  const prey = ELEM[stone.el].beats; let best = -1;
+  const prey = isPlain(stone) ? null : ELEM[stone.el].beats; let best = -1;
   for (const n of ORTH[p]) {
     const c = t.board[n];
-    if (c && c.owner === opp && c.el === prey && c.tier < tier && (best < 0 || c.tier > t.board[best].tier)) best = n;
+    if (prey && c && c.owner === opp && c.el === prey && c.tier < tier && (best < 0 || c.tier > t.board[best].tier)) best = n;
   }
   if (best >= 0) { ev.shatter = { at: best, el: t.board[best].el, tier: t.board[best].tier }; t.board[best] = null; t.captures[owner]++; }
   // 2. Element effect
@@ -631,7 +639,7 @@ function endMatch(reason) {
 
 /* ============================== run / shop ============================== */
 function newRun() {
-  run = { level: 0, lives: LIVES, gold: 0, goldTotal: 0, bag: bagFrom({ 1: 4 }), cleared: [false, false, false], market: [], wins: 0, losses: 0, captures: 0 };
+  run = { level: 0, lives: LIVES, gold: 0, goldTotal: 0, bag: bagFrom(START_MIX), cleared: [false, false, false], market: [], wins: 0, losses: 0, captures: 0 };
   ui.shopSel = null; ui.flash = '';
   startMatch(0);
 }
@@ -652,17 +660,28 @@ function afterMatch() {
   m = null; screen = 'shop'; renderAll();
 }
 
+const roomToAdd = () => elementCount(run.bag) + 1 <= elementCap(run.bag.length + 1);
+const roomToInfuse = () => elementCount(run.bag) + 1 <= elementCap(run.bag.length);
+const canRemove = st => run.bag.length > MIN_BAG && elementCount(run.bag) - (isPlain(st) ? 0 : 1) <= elementCap(run.bag.length - 1);
+const freeSlots = () => elementCap(run.bag.length) - elementCount(run.bag);
+
 function shopAct(act, el) {
   const st = run.bag.find(s => s.uid === ui.shopSel);
-  if (act === 'up' && st && st.tier < 3 && run.gold >= PRICE.up[st.tier]) {
+  if (act === 'up' && st && !isPlain(st) && st.tier < 3 && run.gold >= PRICE.up[st.tier]) {
     run.gold -= PRICE.up[st.tier]; st.tier++; ui.flash = `Carved it up to ${stoneName(st)}.`;
-  } else if (act === 'tx' && st && st.el !== el.dataset.el && run.gold >= PRICE.tx) {
+  } else if (act === 'tx' && st && !isPlain(st) && st.el !== el.dataset.el && run.gold >= PRICE.tx) {
     run.gold -= PRICE.tx; st.el = el.dataset.el; ui.flash = `Transmuted it into ${stoneName(st)}.`;
-  } else if (act === 'rm' && st && run.bag.length > MIN_BAG && run.gold >= PRICE.rm) {
-    run.gold -= PRICE.rm; run.bag = run.bag.filter(s => s !== st); ui.shopSel = null; ui.flash = `Removed ${stoneName(st)} from your bag.`;
+  } else if (act === 'infuse' && st && isPlain(st) && roomToInfuse() && run.gold >= PRICE.infuse) {
+    run.gold -= PRICE.infuse; st.el = el.dataset.el; st.tier = 1; ui.flash = `Infused it into ${stoneName(st)}.`;
+  } else if (act === 'rm' && st && canRemove(st) && run.gold >= PRICE.rm) {
+    run.gold -= PRICE.rm; run.bag = run.bag.filter(s => s !== st); ui.shopSel = null; ui.flash = `Removed a ${stoneName(st)} from your bag.`;
+  } else if (act === 'plain' && run.gold >= PRICE.plain) {
+    run.gold -= PRICE.plain; const ns = newStone(PLAIN, 0); run.bag.push(ns); ui.shopSel = ns.uid;
+    const free = freeSlots();
+    ui.flash = `Added a plain stone. ${free ? `You have room for ${free} more element stone${free === 1 ? '' : 's'}.` : 'One more plain stone makes room for another element stone.'}`;
   } else if (act === 'buy') {
     const i = +el.dataset.i, o = run.market[i];
-    if (o && run.gold >= PRICE.buy[o.tier]) { run.gold -= PRICE.buy[o.tier]; run.bag.push(o); run.market[i] = null; ui.shopSel = o.uid; ui.flash = `Bought ${stoneName(o)}.`; }
+    if (o && roomToAdd() && run.gold >= PRICE.buy[o.tier]) { run.gold -= PRICE.buy[o.tier]; run.bag.push(o); run.market[i] = null; ui.shopSel = o.uid; ui.flash = `Bought ${stoneName(o)}.`; }
   } else if (act === 'reroll' && run.gold >= PRICE.reroll) {
     run.gold -= PRICE.reroll; makeMarket(); ui.flash = 'The merchant laid out new stones.';
   } else return;
@@ -685,6 +704,7 @@ function pips(tier, col) {
   return xs.map(x => `<circle cx="${x}" cy="10.5" r="1.9" fill="${col}"/>`).join('');
 }
 function stoneSVG(el, tier, owner, extra = '') {
+  if (el === PLAIN) return `<circle r="19" fill="${owner === 0 ? 'url(#g-ink)' : 'url(#g-bone)'}" stroke="${owner === 0 ? 'var(--ink)' : 'var(--bone-lo)'}" stroke-width="1"/>` + extra;
   const col = `var(--${el}-${owner === 0 ? 'l' : 'd'})`;
   const fill = owner === 0 ? 'url(#g-ink)' : 'url(#g-bone)';
   const edge = owner === 0 ? 'var(--ink)' : 'var(--bone-lo)';
@@ -771,6 +791,7 @@ function codexHTML() {
         <h3>A match</h3>
         <ul>
           <li>On your turn, pick one of the three stones in your hand and place it on an empty point. You then draw back up to three. When your bag runs out, your used stones are shuffled back in.</li>
+          <li>At most half of every bag can be element stones. The rest are plain stones: ordinary Go stones with no element. Plain stones can’t be shattered, but Water can push them.</li>
           <li>Stones that touch along the lines form a group. A group with no empty neighboring points (liberties) left is captured.</li>
           <li>You can’t play a stone that would have no liberties, and you can’t retake a ko straight away.</li>
           <li>Each side gets ${MAX_TURNS} turns. The match also ends when both players pass in a row.</li>
@@ -794,7 +815,7 @@ function codexHTML() {
         <li>Beat three opponents in order. They all think the same way. The difference is the bag they bring.</li>
         <li>You have ${LIVES} lives. Losing a match costs one, and you rematch the same opponent after visiting the Stonecutter.</li>
         <li>A win pays 12 gold, plus your winning margin (up to 12), plus 1 for every 2 stones you captured. A loss pays 6 plus the same capture bonus.</li>
-        <li>At the Stonecutter: upgrade a stone (I→II ${PRICE.up[1]} gold, II→III ${PRICE.up[2]}), transmute its element (${PRICE.tx}), remove it (${PRICE.rm}), or buy new stones (${PRICE.buy[1]} / ${PRICE.buy[2]} / ${PRICE.buy[3]} by tier). Your bag can’t drop below ${MIN_BAG} stones.</li>
+        <li>At the Stonecutter: upgrade an element stone (I→II ${PRICE.up[1]} gold, II→III ${PRICE.up[2]}), transmute its element (${PRICE.tx}), infuse a plain stone with an element (${PRICE.infuse}), add a plain stone (${PRICE.plain}), remove any stone (${PRICE.rm}), or buy element stones (${PRICE.buy[1]} / ${PRICE.buy[2]} / ${PRICE.buy[3]} by tier). Element stones can never be more than half your bag, and your bag can’t drop below ${MIN_BAG} stones.</li>
       </ul>
     </div>
   </div>`;
@@ -805,11 +826,11 @@ function closeCodex() { $('#codex').hidden = true; }
 /* ============================== title ============================== */
 function tierBar(bag) {
   const c = [0, 0, 0, 0]; bag.forEach(s => c[s.tier]++);
-  return `<div class="tierbar" role="img" aria-label="${c[1]} tier I, ${c[2]} tier II, ${c[3]} tier III">${[1, 2, 3].map(t => c[t] ? `<span class="t${t}" style="width:${c[t] / bag.length * 100}%"></span>` : '').join('')}</div>`;
+  return `<div class="tierbar" role="img" aria-label="${c[0]} plain, ${c[1]} tier I, ${c[2]} tier II, ${c[3]} tier III">${[0, 1, 2, 3].map(t => c[t] ? `<span class="t${t}" style="width:${c[t] / bag.length * 100}%"></span>` : '').join('')}</div>`;
 }
 function bagSummary(bag) {
   const c = [0, 0, 0, 0]; bag.forEach(s => c[s.tier]++);
-  return [1, 2, 3].filter(t => c[t]).map(t => `${c[t]}× tier ${ROMAN[t]}`).join(', ');
+  return [`${c[0]} plain`, ...[1, 2, 3].filter(t => c[t]).map(t => `${c[t]}× tier ${ROMAN[t]}`)].join(', ');
 }
 function heroBoard() {
   const s = 44, o = 22, at = (x, y) => `translate(${o + x * s},${o + y * s})`;
@@ -818,7 +839,7 @@ function heroBoard() {
   for (let i = 0; i < 5; i++) h += `<line x1="${o}" y1="${o + i * s}" x2="${o + 4 * s}" y2="${o + i * s}"/><line x1="${o + i * s}" y1="${o}" x2="${o + i * s}" y2="${o + 4 * s}"/>`;
   h += `</g><circle cx="${o + 2 * s}" cy="${o + 2 * s}" r="3" fill="var(--grid)"/>`;
   h += `<g transform="${at(1, 2)}"><circle r="13" fill="var(--ember)" opacity=".3"/></g><g transform="${at(2, 3)}"><circle r="13" fill="var(--ember)" opacity=".3"/></g>`;
-  const st = [[2, 2, 'fire', 2, 0], [3, 2, 'water', 1, 1], [1, 1, 'air', 3, 0], [3, 1, 'earth', 2, 1], [2, 1, 'earth', 1, 0], [3, 3, 'air', 2, 1]];
+  const st = [[2, 2, 'fire', 2, 0], [3, 2, 'water', 1, 1], [1, 1, 'air', 3, 0], [3, 1, 'earth', 2, 1], [2, 1, PLAIN, 0, 0], [3, 3, PLAIN, 0, 1], [1, 3, PLAIN, 0, 0]];
   for (const [x, y, el, t, ow] of st) h += `<g transform="${at(x, y)} scale(1.05)">${stoneSVG(el, t, ow)}</g>`;
   return h + `</svg>`;
 }
@@ -830,7 +851,7 @@ function renderTitle() {
     <div>
       <p class="eyebrow">A roguelite of Go and the four elements</p>
       <h1>Stones of the Four</h1>
-      <p class="lede">Draw Fire, Water, Earth and Air stones from your bag and play them on a 9×9 board. Each element bends the rules of Go in its own way, and each comes in three tiers. Beat three opponents in a row, and spend your winnings at the Stonecutter between matches.</p>
+      <p class="lede">Draw stones from your bag and play them on a 9×9 board. Up to half of them are element stones: Fire, Water, Earth and Air each bend the rules of Go in their own way, in three tiers. The rest are plain Go stones. Beat three opponents in a row, and spend your winnings at the Stonecutter between matches.</p>
       <div class="cta"><button class="btn primary" data-act="begin">Begin a run</button><button class="btn" data-act="rules">Read the rules</button></div>
       <p class="record">${recText}</p>
     </div>
@@ -838,7 +859,7 @@ function renderTitle() {
   </section>
   <div class="section-h"><h2>Your opponents</h2><p>Everyone plays the same way. Their bags get better.</p></div>
   <div class="ladder">${OPPONENTS.map((o, i) => { const bag = bagFrom(o.mix); return `<article class="rung"><span class="lv">Level ${i + 1}</span><h3>${o.name} ${o.title}</h3><p>${o.blurb}</p><p class="num" style="font-size:.8rem">${bag.length} stones: ${bagSummary(bag)}</p>${tierBar(bag)}</article>`; }).join('')}</div>
-  <div class="tierkey" style="margin-top:10px"><span><i class="t1"></i>Tier I</span><span><i class="t2"></i>Tier II</span><span><i class="t3"></i>Tier III</span><span>You start with 16 tier I stones, four of each element.</span></div>
+  <div class="tierkey" style="margin-top:10px"><span><i class="t0"></i>Plain</span><span><i class="t1"></i>Tier I</span><span><i class="t2"></i>Tier II</span><span><i class="t3"></i>Tier III</span><span>You start with 8 plain stones and 8 tier I element stones, two of each element.</span></div>
   <div class="section-h"><h2>Rules</h2></div>
   ${codexHTML()}`;
 }
@@ -911,7 +932,7 @@ function defaultStatus() {
   if (m.toMove === 1) return `<span class="thinking">${OPPONENTS[m.lv].name} is choosing a stone…</span>`;
   const st = m.piles[0].hand[ui.sel];
   if (!st) return 'Pick a stone from your hand.';
-  return `<b class="el-${st.el}">${stoneName(st)}</b>: ${EFFECT[st.el][st.tier]} ${clashText(st)}`;
+  return `<b class="el-${st.el}">${stoneName(st)}</b>: ${effectText(st)} ${clashText(st)}`;
 }
 
 function statusFor(p) {
@@ -963,7 +984,7 @@ function updateMatch() {
   // opponent strip
   const op = m.piles[1];
   $('#opp').innerHTML = `${miniStone('earth', 3, 1, 34)}<div class="opp-id"><small>Level ${m.lv + 1}</small><b>${opp.name} ${opp.title}</b></div>
-    <div class="opp-hand"><span class="lbl">Their hand</span>${op.hand.map(s => `<span class="mini">${miniStone(s.el, s.tier, 1, 30)}<span>${ROMAN[s.tier]}</span></span>`).join('')}</div>`;
+    <div class="opp-hand"><span class="lbl">Their hand</span>${op.hand.map(s => `<span class="mini">${miniStone(s.el, s.tier, 1, 30)}<span>${isPlain(s) ? '–' : ROMAN[s.tier]}</span></span>`).join('')}</div>`;
   // groups for danger marks
   const danger = new Map();
   for (const side of [0, 1]) for (const g of computeGroups(m.s, side).groups) if (g.libs <= 1) for (const j of g.stones) danger.set(j, g.libs);
@@ -1025,7 +1046,7 @@ function handRowHTML() {
   const pile = m.piles[0];
   const cards = pile.hand.map((st, i) => `<button class="hcard${ui.sel === i ? ' on' : ''}" data-act="hand" data-i="${i}" aria-pressed="${ui.sel === i}">
       <span class="hkey">${i + 1}</span>${miniStone(st.el, st.tier, 0, 44)}
-      <span class="hbody"><span class="hname el-${st.el}">${stoneName(st)}</span><span class="htext">${EFFECT[st.el][st.tier]}</span><span class="hbeat">${clashText(st)}</span></span>
+      <span class="hbody"><span class="hname el-${st.el}">${stoneName(st)}</span><span class="htext">${effectText(st)}</span><span class="hbeat">${clashText(st)}</span></span>
     </button>`).join('');
   const armed = ui.passArm && Date.now() - ui.passArm < 4000;
   return `<div class="hand-row"><div class="hand" role="group" aria-label="Your hand">${cards}</div>
@@ -1053,46 +1074,59 @@ function pathHTML() {
     return (i ? '<span class="link"></span>' : '') + `<span class="node ${cls}"><span class="dot"></span><span><small>Level ${i + 1}${run.cleared[i] ? ' · beaten' : i === run.level ? ' · next' : ''}</small><b>${o.name}</b></span></span>`;
   }).join('')}</nav>`;
 }
-function mixCounts(bag) { const c = {}; EL_ORDER.forEach(el => c[el] = [0, 0, 0, 0]); bag.forEach(s => c[s.el][s.tier]++); return c; }
+function mixCounts(bag) { const c = { plain: 0 }; EL_ORDER.forEach(el => c[el] = [0, 0, 0, 0]); bag.forEach(s => { if (isPlain(s)) c.plain++; else c[s.el][s.tier]++; }); return c; }
 function mixTable(you, them, name) {
   const a = mixCounts(you), b = mixCounts(them);
   const cell = (n, sep) => `<td class="num${n ? '' : ' z'}${sep ? ' sep' : ''}">${n || '·'}</td>`;
   return `<table class="mix"><thead><tr><th></th><th colspan="3">You</th><th colspan="3" class="sep">${name}</th></tr>
     <tr><th></th>${['I', 'II', 'III'].map(t => `<th>${t}</th>`).join('')}${['I', 'II', 'III'].map((t, i) => `<th${i ? '' : ' class="sep"'}>${t}</th>`).join('')}</tr></thead>
     <tbody>${EL_ORDER.map(el => `<tr><td><span class="elcell">${glyphIcon(el)}<span class="el-${el}">${ELEM[el].name}</span></span></td>${[1, 2, 3].map(t => cell(a[el][t])).join('')}${[1, 2, 3].map(t => cell(b[el][t], t === 1)).join('')}</tr>`).join('')}
+    <tr><td><span class="elcell">${miniStone(PLAIN, 0, 0, 15)}<span>Plain</span></span></td><td colspan="3" class="num">${a.plain}</td><td colspan="3" class="num sep">${b.plain}</td></tr>
     <tr><td><b>Total</b></td><td colspan="3" class="num"><b>${you.length}</b></td><td colspan="3" class="num sep"><b>${them.length}</b></td></tr></tbody></table>`;
 }
 function benchHTML() {
   const st = run.bag.find(s => s.uid === ui.shopSel);
-  if (!st) return `<p class="meta">Select a stone in your bag to upgrade, transmute or remove it.</p><p class="flash" aria-live="polite">${ui.flash}</p>`;
+  const flash = `<p class="flash" aria-live="polite">${ui.flash}</p>`;
+  if (!st) return `<p class="meta">Select a stone in your bag to work on it. You can infuse a plain stone with an element, upgrade or transmute an element stone, or remove any stone.</p>${flash}`;
+  const rmBtn = `<button class="btn small" data-act="rm" ${run.gold >= PRICE.rm && canRemove(st) ? '' : 'disabled'}>Remove · ${PRICE.rm} gold</button>`;
+  let rmNote = '';
+  if (run.bag.length <= MIN_BAG) rmNote = `<p class="meta">Your bag is at the minimum of ${MIN_BAG} stones.</p>`;
+  else if (!canRemove(st)) rmNote = `<p class="meta">Removing this plain stone would make element stones more than half your bag.</p>`;
+  if (isPlain(st)) {
+    const room = roomToInfuse();
+    return `<div class="bench-top">${miniStone(PLAIN, 0, 0, 52)}<div><h3>Plain stone</h3><p class="meta">${PLAIN_TEXT} It can’t be shattered, but Water can push it.</p></div></div>
+    <div class="acts"><span class="meta" style="align-self:center">Infuse into tier I (${PRICE.infuse} gold):</span>${EL_ORDER.map(e => `<button class="btn small" data-act="infuse" data-el="${e}" ${room && run.gold >= PRICE.infuse ? '' : 'disabled'}>${glyphIcon(e, 14)} ${ELEM[e].name}</button>`).join('')}</div>
+    ${room ? '' : `<p class="meta">Half your bag is already element stones. Add plain stones to make room.</p>`}
+    <div class="acts">${rmBtn}</div>${rmNote}${flash}`;
+  }
   const up = st.tier < 3 ? PRICE.up[st.tier] : 0;
   return `<div class="bench-top">${miniStone(st.el, st.tier, 0, 52)}<div><h3 class="el-${st.el}">${stoneName(st)}</h3><p class="meta">${EFFECT[st.el][st.tier]}</p></div></div>
     ${st.tier < 3 ? `<p class="meta"><b>At tier ${ROMAN[st.tier + 1]}:</b> ${EFFECT[st.el][st.tier + 1]}</p>` : ''}
     <div class="acts">
       ${st.tier < 3 ? `<button class="btn primary small" data-act="up" ${run.gold >= up ? '' : 'disabled'}>Upgrade to ${ROMAN[st.tier + 1]} · ${up} gold</button>` : `<span class="meta">Already at the top tier.</span>`}
-      <button class="btn small" data-act="rm" ${run.gold >= PRICE.rm && run.bag.length > MIN_BAG ? '' : 'disabled'}>Remove · ${PRICE.rm} gold</button>
+      ${rmBtn}
     </div>
     <div class="acts"><span class="meta" style="align-self:center">Transmute (${PRICE.tx} gold):</span>${EL_ORDER.filter(e => e !== st.el).map(e => `<button class="btn small" data-act="tx" data-el="${e}" ${run.gold >= PRICE.tx ? '' : 'disabled'}>${glyphIcon(e, 14)} ${ELEM[e].name}</button>`).join('')}</div>
-    ${run.bag.length <= MIN_BAG ? `<p class="meta">Your bag is at the minimum of ${MIN_BAG} stones.</p>` : ''}
-    <p class="flash" aria-live="polite">${ui.flash}</p>`;
+    ${rmNote}${flash}`;
 }
 function renderShop() {
   const opp = OPPONENTS[run.level];
   const bag = sortBag(run.bag);
-  const rows = EL_ORDER.map(el => {
+  const rows = SORT_ORDER.map(el => {
     const list = bag.filter(s => s.el === el);
-    return `<div class="bagrow"><span class="rowlbl el-${el}">${ELEM[el].name}</span>${list.length ? list.map(s => `<button class="chip${ui.shopSel === s.uid ? ' on' : ''}" data-act="sel" data-uid="${s.uid}" aria-pressed="${ui.shopSel === s.uid}" aria-label="${stoneName(s)}">${miniStone(s.el, s.tier, 0, 38)}</button>`).join('') : '<span class="meta">none</span>'}</div>`;
+    return `<div class="bagrow"><span class="rowlbl el-${el}">${el === PLAIN ? 'Plain' : ELEM[el].name}</span>${list.length ? list.map(s => `<button class="chip${ui.shopSel === s.uid ? ' on' : ''}" data-act="sel" data-uid="${s.uid}" aria-pressed="${ui.shopSel === s.uid}" aria-label="${stoneName(s)}">${miniStone(s.el, s.tier, 0, 38)}</button>`).join('') : '<span class="meta">none</span>'}</div>`;
   }).join('');
   const offers = run.market.map((o, i) => o ? `<div class="offer"><div class="top">${miniStone(o.el, o.tier, 0, 40)}<b class="el-${o.el}">${stoneName(o)}</b></div><p>${EFFECT[o.el][o.tier]}</p>
-      <button class="btn small" data-act="buy" data-i="${i}" ${run.gold >= PRICE.buy[o.tier] ? '' : 'disabled'}>Buy · ${PRICE.buy[o.tier]} gold</button></div>`
+      <button class="btn small" data-act="buy" data-i="${i}" ${run.gold >= PRICE.buy[o.tier] && roomToAdd() ? '' : 'disabled'}>Buy · ${PRICE.buy[o.tier]} gold</button></div>`
     : `<div class="offer empty">Sold</div>`).join('');
   screenEl.innerHTML = `
   ${pathHTML()}
   <div class="shop-head"><h1>The Stonecutter</h1><p>You have <b class="num">${run.gold}</b> gold to spend before the next match.</p></div>
   <div class="shop-grid">
     <section class="panel">
-      <div class="panel-h"><h2>Your bag</h2><span class="meta">${run.bag.length} stones · you draw 3 at a time</span></div>
+      <div class="panel-h"><h2>Your bag</h2><span class="meta">${run.bag.length} stones · ${elementCount(run.bag)} of ${elementCap(run.bag.length)} element slots used</span></div>
       <div class="bag">${rows}</div>
+      <div class="acts" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center"><button class="btn small" data-act="plain" ${run.gold >= PRICE.plain ? '' : 'disabled'}>Add a plain stone · ${PRICE.plain} gold</button><span class="meta">At most half your bag can be element stones. Every 2 plain stones you add make room for 1 more.</span></div>
       <div class="bench">${benchHTML()}</div>
     </section>
     <div class="right-col">
@@ -1104,7 +1138,7 @@ function renderShop() {
       </section>
       <section class="panel">
         <div class="panel-h"><h2>Market</h2><button class="btn small" data-act="reroll" ${run.gold >= PRICE.reroll ? '' : 'disabled'}>New offers · ${PRICE.reroll} gold</button></div>
-        <div class="offers">${offers}</div>
+        ${roomToAdd() ? '' : `<p class="meta">Your bag is at its element limit. Add plain stones or infuse a plain stone instead.</p>`}<div class="offers">${offers}</div>
       </section>
     </div>
   </div>`;
@@ -1149,7 +1183,7 @@ document.addEventListener('click', e => {
   if (act === 'to-end') return afterMatch();
   if (act === 'sel') { ui.shopSel = +el.dataset.uid; ui.flash = ''; return renderAll(); }
   if (act === 'go') { ui.flash = ''; return startMatch(run.level); }
-  if (['up', 'tx', 'rm', 'buy', 'reroll'].includes(act)) return shopAct(act, el);
+  if (['up', 'tx', 'infuse', 'rm', 'plain', 'buy', 'reroll'].includes(act)) return shopAct(act, el);
 });
 $('#codex').addEventListener('click', e => { if (e.target.id === 'codex') closeCodex(); });
 document.addEventListener('keydown', e => {
