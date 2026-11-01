@@ -1,6 +1,9 @@
 // Headless screenshot of a page in this repo, via Microsoft Edge and the DevTools protocol. No dependencies.
 //   node tools/shot.mjs --url papercut/index.html --out shot.png   (no leading slash: Git Bash would turn it into a Windows path)
-//   --root <dir> serves another folder instead of the repo root. [--w 1280 --h 900] [--ready "window.__ready"] [--eval "js"] [--timeout 30000]
+//   --root <dir> serves another folder instead of the repo root.
+//   --gpu <high,low> renders on the adapter with that LUID (tools/gpus.py lists them); SOTF_GPU_LUID sets the default.
+//   Edge is killed as a whole process tree on exit (taskkill /T); an earlier version left the browser running and its
+//   GPU process kept rendering the animations, which pinned the integrated GPU at 100 percent. [--w 1280 --h 900] [--ready "window.__ready"] [--eval "js"] [--timeout 30000]
 // Serves the repo root on a free port, opens the page, waits for the --ready expression to be truthy, runs --eval
 // (JSON result printed), captures a PNG and prints console messages and page errors.
 import { spawn } from 'node:child_process';
@@ -14,6 +17,7 @@ const args = Object.fromEntries(process.argv.slice(2).reduce((a, v, i, arr) => {
 const ROOT = args.root ? resolve(String(args.root)) : resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const EDGE = 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe';
 const W = +(args.w || 1280), H = +(args.h || 900), TIMEOUT = +(args.timeout || 30000);
+const gpuLuid = args.gpu === true ? '' : (args.gpu || process.env.SOTF_GPU_LUID || '');
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.glb': 'model/gltf-binary', '.json': 'application/json', '.svg': 'image/svg+xml', '.woff2': 'font/woff2' };
 
 const server = createServer(async (req, res) => {
@@ -29,13 +33,30 @@ const cdpPort = 9300 + Math.floor(Math.random() * 500);
 const profile = await mkdtemp(join(tmpdir(), 'sotf-edge-'));
 const edge = spawn(EDGE, [`--headless=new`, `--remote-debugging-port=${cdpPort}`, `--user-data-dir=${profile}`, '--disable-extensions', '--disable-sync', '--no-first-run', '--no-default-browser-check',
   '--disable-features=CalculateNativeWinOcclusion', '--disable-backgrounding-occluded-windows', '--disable-renderer-backgrounding', '--disable-background-timer-throttling',
-  '--enable-unsafe-swiftshader', '--hide-scrollbars', `--window-size=${W},${H}`, 'about:blank'], { stdio: 'ignore' });
+  '--enable-unsafe-swiftshader', '--hide-scrollbars', `--window-size=${W},${H}`,
+  ...(gpuLuid ? ['--use-angle=d3d11', `--use-adapter-luid=${gpuLuid}`] : []), 'about:blank'], { stdio: 'ignore' });
 
-const cleanup = async () => { try { edge.kill(); } catch {} server.close(); setTimeout(() => rm(profile, { recursive: true, force: true }).catch(() => {}), 500); };
+let cleaned = false, browserWs = null;
+const cleanup = async () => {
+  if (cleaned) return; cleaned = true;
+  // Ask the browser to close, then make sure. Edge relaunches itself at startup, so the pid Node spawned is long dead:
+  // the browser is found by this run's unique profile dir instead.
+  try { if (browserWs && browserWs.readyState === 1) { browserWs.send(JSON.stringify({ id: 1, method: 'Browser.close' })); await new Promise(r => setTimeout(r, 500)); } } catch {}
+  if (process.platform === 'win32') {
+    const tag = profile.split(/[\/]/).pop();
+    const ps = `Get-CimInstance Win32_Process | Where-Object { $_.Name -eq 'msedge.exe' -and $_.CommandLine -like '*${tag}*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }`;
+    await new Promise(r => { const k = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(ps, 'utf16le').toString('base64')], { stdio: 'ignore' }); k.on('exit', r); k.on('error', r); });
+  } else { try { edge.kill(); } catch {} }
+  server.close();
+  await new Promise(r => setTimeout(r, 300));
+  await rm(profile, { recursive: true, force: true }).catch(() => {});
+};
+for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(sig, () => cleanup().then(() => process.exit(130)));
 try {
   let targets = null;
   for (let i = 0; i < 100 && !targets; i++) { try { targets = await (await fetch(`http://127.0.0.1:${cdpPort}/json`)).json(); } catch { await new Promise(r => setTimeout(r, 100)); } }
   const page = targets.find(t => t.type === 'page');
+  try { const v = await (await fetch(`http://127.0.0.1:${cdpPort}/json/version`)).json(); browserWs = new WebSocket(v.webSocketDebuggerUrl); await new Promise(r => { browserWs.onopen = r; browserWs.onerror = r; }); } catch {}
   const ws = new WebSocket(page.webSocketDebuggerUrl);
   await new Promise((res, rej) => { ws.onopen = res; ws.onerror = rej; });
   let id = 0; const pending = new Map(); const logs = [];
