@@ -1,0 +1,1179 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="A roguelite take on 9x9 Go with Fire, Water, Earth and Air stones.">
+<title>Stones of the Four</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@600;800&family=Atkinson+Hyperlegible:wght@400;700&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: the wooden board is the hero object; a quiet slate frame around it, side panels read like a scorer's notebook. */
+:root{
+  --bg:#e2e5e9; --surface:#f3f4f6; --surface-2:#e8ebef; --fg:#191b20; --muted:#59606b; --line:#c6cbd3;
+  --fire:#c4370f; --water:#1d5db5; --earth:#3c7620; --air:#8a6200;
+  --good:#2f7a2a; --bad:#c23a1c;
+  /* physical objects: same in both themes */
+  --wood-1:#ddba80; --wood-2:#cda667; --grid:#4f3a20; --grain:#9c7640;
+  --ink:#141418; --ink-hi:#4c4c57; --bone:#efe9de; --bone-hi:#ffffff; --bone-lo:#c3b8a5;
+  --fire-l:#ff6b3d; --fire-d:#c4370f; --water-l:#5aa8ff; --water-d:#1d5db5;
+  --earth-l:#84cc5c; --earth-d:#3c7620; --air-l:#f4c534; --air-d:#946a00;
+  --mark:#b5179e; --danger:#d22f27; --ember:#ff7a2f;
+  --font-display:"Shippori Mincho","Hiragino Mincho ProN","Yu Mincho",Georgia,serif;
+  --font-body:"Atkinson Hyperlegible",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --font-mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+  --r:10px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#111317; --surface:#1a1d23; --surface-2:#22262e; --fg:#e9e6df; --muted:#9aa1ac; --line:#2f343d;
+    --fire:#ff7a52; --water:#6cb2ff; --earth:#8fd067; --air:#f2c540; --good:#8fd067; --bad:#ff7a52;
+    --wood-1:#cba56b; --wood-2:#bc965c; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#111317; --surface:#1a1d23; --surface-2:#22262e; --fg:#e9e6df; --muted:#9aa1ac; --line:#2f343d;
+  --fire:#ff7a52; --water:#6cb2ff; --earth:#8fd067; --air:#f2c540; --good:#8fd067; --bad:#ff7a52;
+  --wood-1:#cba56b; --wood-2:#bc965c; color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--font-body);font-size:15px;line-height:1.5}
+button{font:inherit;color:inherit}
+h1,h2,h3{font-family:var(--font-display);font-weight:800;text-wrap:balance;margin:0;line-height:1.15}
+p{margin:0}
+.num{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+.el-fire{color:var(--fire)} .el-water{color:var(--water)} .el-earth{color:var(--earth)} .el-air{color:var(--air)}
+:focus-visible{outline:2px solid var(--mark);outline-offset:2px}
+
+/* top bar */
+.topbar{background:var(--surface);border-bottom:1px solid var(--line)}
+.topbar-in{max-width:1200px;margin:0 auto;display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+  padding-block:10px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.brand{display:flex;align-items:center;gap:10px;font-family:var(--font-display);font-weight:800;font-size:1.15rem;background:none;border:0;padding:0;cursor:pointer}
+.runstat{margin-left:auto;display:flex;align-items:center;gap:14px;flex-wrap:wrap;font-size:.9rem;color:var(--muted)}
+.runstat b{color:var(--fg)}
+.lives{display:inline-flex;gap:4px;vertical-align:middle}
+.lives i{width:11px;height:11px;border-radius:50%;background:var(--fg);display:inline-block}
+.lives i.lost{background:none;border:1.5px solid var(--muted)}
+
+/* buttons */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:1px solid var(--line);background:var(--surface);
+  border-radius:999px;padding:8px 16px;cursor:pointer;font-weight:700;font-size:.92rem;white-space:nowrap}
+.btn:hover:not(:disabled){border-color:var(--fg)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.primary{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+.btn.primary:hover:not(:disabled){opacity:.88}
+.btn.small{padding:5px 12px;font-size:.84rem}
+.btn.warn{border-color:var(--bad);color:var(--bad)}
+
+.screen{max-width:1200px;margin:0 auto;padding-block:24px 48px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+
+/* title */
+.hero{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,.85fr);gap:40px;align-items:center;padding-block:24px 36px}
+.eyebrow{text-transform:uppercase;letter-spacing:.14em;font-size:.76rem;color:var(--muted);font-weight:700}
+.hero h1{font-size:clamp(2.6rem,6.4vw,4.8rem);margin-block:10px 16px;letter-spacing:-.01em}
+.lede{font-size:1.08rem;max-width:58ch;color:var(--fg)}
+.cta{display:flex;gap:10px;flex-wrap:wrap;margin-top:22px}
+.record{margin-top:14px;color:var(--muted);font-size:.88rem}
+.hero-board{margin:0;max-width:360px;justify-self:center;width:100%}
+.hero-board svg{width:100%;height:auto;display:block;filter:drop-shadow(0 14px 22px rgba(0,0,0,.22))}
+.section-h{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-block:28px 14px}
+.section-h h2{font-size:1.5rem}
+.section-h p{color:var(--muted)}
+.ladder{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.rung{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px;display:flex;flex-direction:column;gap:8px}
+.rung .lv{font-size:.76rem;text-transform:uppercase;letter-spacing:.12em;color:var(--muted);font-weight:700}
+.rung h3{font-size:1.2rem}
+.rung p{color:var(--muted);font-size:.9rem}
+.tierbar{display:flex;height:10px;border-radius:5px;overflow:hidden;background:var(--surface-2);margin-top:auto}
+.tierbar span{display:block;height:100%}
+.t1{background:var(--line)} .t2{background:var(--muted)} .t3{background:var(--fg)}
+.tierkey{display:flex;gap:12px;font-size:.78rem;color:var(--muted);flex-wrap:wrap}
+.tierkey i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:4px;vertical-align:-1px}
+
+/* codex */
+.codex{display:grid;gap:22px}
+.codex h3{font-size:1.15rem;margin-bottom:8px}
+.codex ul{margin:0;padding-left:1.1em;display:grid;gap:6px;max-width:72ch}
+.codex-grid{display:grid;grid-template-columns:minmax(0,1fr) 220px;gap:24px;align-items:start}
+.cycle svg{width:100%;max-width:220px;height:auto;display:block}
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:var(--r);background:var(--surface)}
+table.tiers{border-collapse:collapse;width:100%;min-width:620px;font-size:.9rem}
+table.tiers th,table.tiers td{padding:10px 12px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+table.tiers tr:last-child td{border-bottom:0}
+table.tiers thead th{font-size:.76rem;text-transform:uppercase;letter-spacing:.12em;color:var(--muted)}
+table.tiers td.elname{white-space:nowrap;font-weight:700}
+.elcell{display:flex;align-items:center;gap:8px}
+.note{color:var(--muted);font-size:.88rem;margin-top:6px}
+
+/* modal */
+.modal{position:fixed;inset:0;z-index:50;background:rgba(10,12,16,.55);display:flex;justify-content:center;align-items:flex-start;overflow-y:auto;
+  padding-block:calc(24px + env(safe-area-inset-top,0px)) calc(24px + env(safe-area-inset-bottom,0px));
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.modal-panel{background:var(--bg);border:1px solid var(--line);border-radius:14px;max-width:920px;width:100%;padding:24px;position:relative}
+.modal-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px}
+.modal-head h2{font-size:1.6rem}
+
+/* match */
+.match{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:24px;align-items:start}
+.board-col{display:flex;flex-direction:column;gap:12px;min-width:0;max-width:660px;width:100%;justify-self:center}
+.opp-strip{display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:10px 14px}
+.opp-id{display:flex;flex-direction:column;line-height:1.25;min-width:0}
+.opp-id small{color:var(--muted);font-size:.76rem;text-transform:uppercase;letter-spacing:.1em;font-weight:700}
+.opp-id b{font-family:var(--font-display);font-size:1.1rem}
+.opp-hand{margin-left:auto;display:flex;gap:8px;align-items:center}
+.opp-hand .lbl{font-size:.78rem;color:var(--muted);margin-right:2px}
+.mini{display:inline-flex;flex-direction:column;align-items:center;font-size:.7rem;color:var(--muted);gap:1px}
+.thinking{font-size:.82rem;color:var(--muted);font-style:italic}
+.board-wrap{position:relative;aspect-ratio:1;width:100%;max-width:100%}
+#board{width:100%;height:100%;display:block;touch-action:manipulation;filter:drop-shadow(0 10px 18px rgba(0,0,0,.2));border-radius:8px}
+#board:focus-visible{outline:2px solid var(--mark);outline-offset:4px}
+.status{min-height:2.9em;font-size:.93rem;color:var(--fg);background:var(--surface-2);border-radius:8px;padding:8px 12px}
+.status .why{color:var(--bad);font-weight:700}
+.hand-row{display:flex;gap:10px;align-items:stretch}
+.hand{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;flex:1;min-width:0}
+.hcard{position:relative;display:flex;gap:10px;align-items:flex-start;text-align:left;background:var(--surface);border:1.5px solid var(--line);
+  border-radius:var(--r);padding:10px;cursor:pointer;min-width:0}
+.hcard:hover{border-color:var(--muted)}
+.hcard.on{border-color:var(--fg);box-shadow:0 0 0 2px var(--fg) inset}
+.hcard svg{flex:none}
+.hbody{display:flex;flex-direction:column;gap:2px;min-width:0}
+.hname{font-weight:700}
+.htext{font-size:.8rem;color:var(--muted);line-height:1.35}
+.hbeat{font-size:.74rem;color:var(--muted)}
+.hkey{position:absolute;top:6px;right:8px;font-family:var(--font-mono);font-size:.7rem;color:var(--muted)}
+.passcol{display:flex;flex-direction:column;gap:6px;justify-content:center}
+.side{display:flex;flex-direction:column;gap:14px;min-width:0}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px}
+.card h3{font-size:1rem;margin-bottom:10px}
+.scoregrid{display:grid;grid-template-columns:auto 1fr 1fr;gap:4px 12px;font-size:.9rem;align-items:center}
+.scoregrid .h{font-size:.74rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);font-weight:700}
+.scoregrid .v{text-align:right}
+.scoregrid .tot{font-weight:700;border-top:1px solid var(--line);padding-top:4px}
+.log{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;max-height:300px;overflow-y:auto;font-size:.86rem}
+.log li{padding-left:12px;position:relative;line-height:1.4}
+.log li::before{content:"";position:absolute;left:0;top:.45em;width:7px;height:7px;border-radius:50%}
+.log li.s0::before{background:var(--fg)}
+.log li.s1::before{border:1.5px solid var(--muted)}
+.log li.sys{color:var(--muted)}
+.log li.sys::before{display:none}
+.result{background:var(--surface);border:1.5px solid var(--fg);border-radius:var(--r);padding:16px;display:grid;gap:10px}
+.result h2{font-size:1.5rem}
+.result .row{display:flex;gap:10px;flex-wrap:wrap}
+.gold{font-weight:700}
+
+/* board svg classes */
+.drop{animation:drop .28s ease-out;transform-box:fill-box;transform-origin:center}
+@keyframes drop{from{transform:scale(1.35);opacity:0}to{transform:none;opacity:1}}
+.slide{animation:slide .38s ease-out}
+@keyframes slide{from{transform:translate(var(--dx),var(--dy))}to{transform:none}}
+.vanish{animation:vanish .65s ease-in forwards;transform-box:fill-box;transform-origin:center}
+@keyframes vanish{0%{opacity:1}100%{transform:scale(.55);opacity:0}}
+.peril{animation:peril 1s ease-in-out infinite alternate}
+@keyframes peril{from{opacity:.35}to{opacity:1}}
+.ghost{opacity:.6}
+@media (prefers-reduced-motion: reduce){.drop,.slide,.vanish,.peril{animation:none}.vanish{opacity:0}}
+
+/* shop */
+.path{display:flex;align-items:center;gap:0;margin-bottom:20px;flex-wrap:wrap;row-gap:10px}
+.node{display:flex;align-items:center;gap:10px;padding:8px 14px;border:1px solid var(--line);border-radius:999px;background:var(--surface);font-size:.9rem}
+.node small{color:var(--muted);font-size:.72rem;text-transform:uppercase;letter-spacing:.1em;font-weight:700;display:block;line-height:1}
+.node b{display:block;line-height:1.3}
+.node.done{opacity:.7}
+.node.next{border-color:var(--fg);box-shadow:0 0 0 1px var(--fg) inset}
+.node .dot{width:12px;height:12px;border-radius:50%;border:1.5px solid var(--muted);flex:none}
+.node.done .dot{background:var(--good);border-color:var(--good)}
+.node.next .dot{background:var(--fg);border-color:var(--fg)}
+.link{width:28px;height:1.5px;background:var(--line);flex:none}
+.shop-head{display:flex;align-items:baseline;gap:16px;flex-wrap:wrap;margin-bottom:6px}
+.shop-head h1{font-size:clamp(1.8rem,4vw,2.4rem)}
+.shop-head p{color:var(--muted)}
+.shop-grid{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:20px;align-items:start;margin-top:16px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px;display:flex;flex-direction:column;gap:14px;min-width:0}
+.panel-h{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.panel-h h2{font-size:1.2rem}
+.meta{color:var(--muted);font-size:.86rem}
+.bag{display:flex;flex-direction:column;gap:10px}
+.bagrow{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.bagrow .rowlbl{width:58px;font-size:.8rem;font-weight:700}
+.chip{display:inline-flex;align-items:center;justify-content:center;border:1.5px solid transparent;background:none;border-radius:50%;padding:1px;cursor:pointer}
+.chip:hover{border-color:var(--muted)}
+.chip.on{border-color:var(--fg);box-shadow:0 0 0 2px var(--fg)}
+.bench{border-top:1px solid var(--line);padding-top:14px;display:grid;gap:10px}
+.bench-top{display:flex;gap:12px;align-items:center}
+.bench-top h3{font-size:1.1rem}
+.bench .acts{display:flex;flex-wrap:wrap;gap:8px}
+.flash{font-size:.88rem;color:var(--good);font-weight:700;min-height:1.3em}
+.offers{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.offer{border:1px solid var(--line);border-radius:var(--r);padding:12px;display:flex;flex-direction:column;gap:6px;background:var(--bg)}
+.offer .top{display:flex;align-items:center;gap:10px}
+.offer p{font-size:.82rem;color:var(--muted);flex:1}
+.offer.empty{align-items:center;justify-content:center;color:var(--muted);font-size:.85rem;min-height:120px}
+table.mix{border-collapse:collapse;font-size:.86rem;width:100%}
+table.mix th,table.mix td{padding:4px 6px;text-align:center}
+table.mix thead th{font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
+table.mix td:first-child,table.mix th:first-child{text-align:left}
+table.mix .sep{border-left:1px solid var(--line)}
+table.mix td.z{color:var(--line)}
+.right-col{display:flex;flex-direction:column;gap:20px;min-width:0}
+
+/* end */
+.endcard{max-width:720px;margin:24px auto;display:grid;gap:18px;text-align:left}
+.endcard h1{font-size:clamp(2.2rem,5vw,3.4rem)}
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px}
+.stat small{display:block;color:var(--muted);font-size:.74rem;text-transform:uppercase;letter-spacing:.1em;font-weight:700}
+.stat b{font-size:1.5rem;font-family:var(--font-mono)}
+
+@media (max-width: 960px){
+  .match{grid-template-columns:minmax(0,1fr)}
+  .side{max-width:660px;width:100%;justify-self:center}
+  .shop-grid{grid-template-columns:minmax(0,1fr)}
+}
+@media (max-width: 760px){
+  .hero{grid-template-columns:minmax(0,1fr);gap:20px}
+  .hero-board{max-width:260px;order:-1}
+  .ladder{grid-template-columns:minmax(0,1fr)}
+  .codex-grid{grid-template-columns:minmax(0,1fr)}
+  .stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media (max-width: 560px){
+  .htext,.hbeat{display:none}
+  .hcard{flex-direction:column;align-items:center;text-align:center;padding:8px 6px;gap:4px}
+  .hname{font-size:.86rem}
+  .hand-row{flex-direction:column}
+  .passcol{flex-direction:row}
+  .passcol .btn{flex:1}
+  .opp-hand .lbl{display:none}
+  .offers{grid-template-columns:minmax(0,1fr)}
+  .modal-panel{padding:16px}
+}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <radialGradient id="g-ink" cx="36%" cy="30%" r="78%"><stop offset="0" style="stop-color:var(--ink-hi)"/><stop offset="1" style="stop-color:var(--ink)"/></radialGradient>
+    <radialGradient id="g-bone" cx="36%" cy="30%" r="78%"><stop offset="0" style="stop-color:var(--bone-hi)"/><stop offset=".65" style="stop-color:var(--bone)"/><stop offset="1" style="stop-color:var(--bone-lo)"/></radialGradient>
+    <linearGradient id="g-wood" x1="0" y1="0" x2="1" y2="1"><stop offset="0" style="stop-color:var(--wood-1)"/><stop offset=".55" style="stop-color:var(--wood-2)"/><stop offset="1" style="stop-color:var(--wood-1)"/></linearGradient>
+    <marker id="arrow" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" style="fill:var(--water-d)"/></marker>
+  </defs>
+</svg>
+
+<div class="app">
+  <header class="topbar"><div class="topbar-in" id="topbar"></div></header>
+  <main id="screen" class="screen"></main>
+</div>
+<div id="codex" class="modal" hidden>
+  <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="codex-title">
+    <div class="modal-head"><h2 id="codex-title">How to play</h2><button class="btn small" data-act="close-codex" id="codex-close">Close</button></div>
+    <div id="codex-body"></div>
+  </div>
+</div>
+
+<script>
+'use strict';
+/* ============================== constants ============================== */
+const N = 9, NN = N * N, MAX_TURNS = 30, KOMI = 2.5, HAND = 3, MIN_BAG = 6, LIVES = 2;
+const COLS = 'ABCDEFGHJ', ROMAN = ['', 'I', 'II', 'III'];
+const EL_ORDER = ['fire', 'water', 'earth', 'air'];
+const ELEM = {
+  fire:  { name: 'Fire',  beats: 'air'   },
+  water: { name: 'Water', beats: 'fire'  },
+  earth: { name: 'Earth', beats: 'water' },
+  air:   { name: 'Air',   beats: 'earth' },
+};
+const EFFECT = {
+  fire:  ['', 'Scorches the empty points next to it for 1 enemy turn.',
+              'Scorches the empty points next to it for 2 enemy turns.',
+              'Scorches adjacent and diagonal empty points for 2 enemy turns.'],
+  water: ['', 'Pushes adjacent enemy tier I stones one point away.',
+              'Pushes adjacent enemy stones up to tier II one point away.',
+              'Pushes any adjacent enemy stone up to two points away.'],
+  earth: ['', 'Its group survives 1 enemy turn after being surrounded.',
+              'Its group survives 2 enemy turns after being surrounded.',
+              'Its group survives 3 enemy turns after being surrounded.'],
+  air:   ['', 'Connects diagonally to your stones.',
+              'Connects diagonally and across a one-point jump.',
+              'Connects diagonally, across a jump, and at a knight’s move.'],
+};
+const PRICE = { up: { 1: 3, 2: 6 }, buy: { 1: 2, 2: 5, 3: 9 }, tx: 2, rm: 1, reroll: 2 };
+const OPPONENTS = [
+  { name: 'Ren',    title: 'the Apprentice', mix: { 1: 4 },       blurb: 'Carries the same plain tier I stones you start with.' },
+  { name: 'Mirela', title: 'the Adept',      mix: { 1: 1, 2: 3 }, blurb: 'Mostly tier II stones, with one tier I of each element.' },
+  { name: 'Ozu',    title: 'the Master',     mix: { 2: 1, 3: 3 }, blurb: 'Three tier III stones of every element, backed by tier II.' },
+];
+const MARKET_WEIGHTS = [[0.8, 0.2, 0], [0.55, 0.4, 0.05], [0.25, 0.5, 0.25]];
+const STORE_KEY = 'stones-of-the-four:v1';
+
+/* ============================== geometry ============================== */
+const X = i => i % N, Y = i => (i / N) | 0, idx = (x, y) => y * N + x;
+const inb = (x, y) => x >= 0 && y >= 0 && x < N && y < N;
+const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+const ORTH = [], DIAG = [], JUMP = [], KNIGHT = [], NEAR = [];
+const INFW = [0, 1.0, 0.5, 0.22];
+for (let i = 0; i < NN; i++) {
+  const x = X(i), y = Y(i);
+  const pick = list => list.filter(([dx, dy]) => inb(x + dx, y + dy)).map(([dx, dy]) => idx(x + dx, y + dy));
+  ORTH[i] = pick(DIRS);
+  DIAG[i] = pick([[1, 1], [1, -1], [-1, 1], [-1, -1]]);
+  JUMP[i] = pick([[2, 0], [-2, 0], [0, 2], [0, -2]]);
+  KNIGHT[i] = pick([[1, 2], [2, 1], [-1, 2], [-2, 1], [1, -2], [2, -1], [-1, -2], [-2, -1]]);
+  const near = [];
+  for (let dy = -3; dy <= 3; dy++) for (let dx = -3; dx <= 3; dx++) {
+    const d = Math.abs(dx) + Math.abs(dy);
+    if (d >= 1 && d <= 3 && inb(x + dx, y + dy)) near.push(idx(x + dx, y + dy), d);
+  }
+  NEAR[i] = near;
+}
+const stepD = (p, dx, dy) => { const x = X(p) + dx, y = Y(p) + dy; return inb(x, y) ? idx(x, y) : -1; };
+const coord = p => COLS[X(p)] + (N - Y(p));
+
+/* ============================== state ============================== */
+let run = null, m = null, screen = 'title';
+const ui = { sel: -1, hover: -1, cursor: 40, kbd: false, shopSel: null, flash: '', lastPointer: 'mouse', aiTimer: 0, passArm: 0 };
+let NEXT_ID = 1, UID = 1;
+
+const rnd = n => Math.floor(Math.random() * n);
+const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = rnd(i + 1); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+const newStone = (el, tier) => ({ uid: UID++, el, tier });
+const stoneName = st => `${ELEM[st.el].name} ${ROMAN[st.tier]}`;
+const clashText = st => st.tier === 1 ? 'Too weak to shatter anything.' : `Shatters an adjacent ${ELEM[ELEM[st.el].beats].name} of tier ${st.tier === 2 ? 'I' : 'I or II'}.`;
+const bagFrom = mix => { const b = []; for (const el of EL_ORDER) for (const t of [1, 2, 3]) for (let k = 0; k < (mix[t] || 0); k++) b.push(newStone(el, t)); return b; };
+const sortBag = bag => bag.slice().sort((a, b) => EL_ORDER.indexOf(a.el) - EL_ORDER.indexOf(b.el) || b.tier - a.tier);
+
+function loadRecord() { try { return JSON.parse(localStorage.getItem(STORE_KEY)) || { best: 0, runsWon: 0 }; } catch (e) { return { best: 0, runsWon: 0 }; } }
+function saveRecord(r) { try { localStorage.setItem(STORE_KEY, JSON.stringify(r)); } catch (e) { /* storage unavailable */ } }
+
+/* ============================== rules engine ============================== */
+const cloneS = s => ({ board: s.board.map(c => c ? { ...c } : null), scorch: s.scorch.map(x => x ? { ...x } : null), captures: s.captures.slice() });
+const sig = board => board.map(c => c ? c.owner : '.').join('');
+const airT = c => (c && c.el === 'air') ? c.tier : 0;
+const newEv = () => ({ shatter: null, scorched: 0, pushed: 0, captured: 0, cracked: 0 });
+
+function computeGroups(s, owner) {
+  const b = s.board, sc = s.scorch, gid = new Int16Array(NN).fill(-1), groups = [];
+  for (let i = 0; i < NN; i++) {
+    const c = b[i];
+    if (!c || c.owner !== owner || gid[i] >= 0) continue;
+    const g = { stones: [], libs: 0 }, gi = groups.length, stack = [i];
+    gid[i] = gi;
+    while (stack.length) {
+      const j = stack.pop(); g.stones.push(j);
+      const aj = airT(b[j]);
+      const visit = (n, need) => {
+        const cn = b[n];
+        if (cn && cn.owner === owner && gid[n] < 0 && Math.max(aj, airT(cn)) >= need) { gid[n] = gi; stack.push(n); }
+      };
+      for (const n of ORTH[j]) visit(n, 0);
+      for (const n of DIAG[j]) visit(n, 1);
+      for (const n of JUMP[j]) visit(n, 2);
+      for (const n of KNIGHT[j]) visit(n, 3);
+    }
+    const libs = new Set();
+    for (const j of g.stones) for (const n of ORTH[j]) if (!b[n] && !(sc[n] && sc[n].owner !== owner)) libs.add(n);
+    g.libs = libs.size;
+    groups.push(g);
+  }
+  return { groups, gid };
+}
+
+// Victim groups without liberties crack their Earth armor or get captured. Groups that breathe regain armor.
+function resolveCaptures(t, victim, attacker, ev) {
+  const { groups } = computeGroups(t, victim);
+  for (const g of groups) {
+    const earth = g.stones.filter(j => t.board[j].el === 'earth');
+    if (g.libs === 0) {
+      const armor = earth.reduce((mx, j) => Math.max(mx, t.board[j].hp), 0);
+      if (armor > 0) { for (const j of earth) t.board[j].hp = Math.max(0, t.board[j].hp - 1); ev.cracked += g.stones.length; }
+      else { for (const j of g.stones) t.board[j] = null; t.captures[attacker] += g.stones.length; ev.captured += g.stones.length; }
+    } else {
+      for (const j of earth) t.board[j].hp = t.board[j].tier;
+    }
+  }
+}
+
+function applyMove(s, owner, stone, p, koSig) {
+  if (s.board[p]) return { ok: false, why: 'That point is taken.' };
+  if (s.scorch[p] && s.scorch[p].owner !== owner) return { ok: false, why: 'That point is scorched. You can’t play there until the fire dies down.' };
+  const t = cloneS(s), opp = 1 - owner, ev = newEv(), tier = stone.tier;
+  t.board[p] = { id: NEXT_ID++, owner, el: stone.el, tier, hp: stone.el === 'earth' ? tier : 0 };
+  t.scorch[p] = null;
+  // 1. Clash: shatter one adjacent enemy stone of the element this one beats, of a strictly lower tier.
+  const prey = ELEM[stone.el].beats; let best = -1;
+  for (const n of ORTH[p]) {
+    const c = t.board[n];
+    if (c && c.owner === opp && c.el === prey && c.tier < tier && (best < 0 || c.tier > t.board[best].tier)) best = n;
+  }
+  if (best >= 0) { ev.shatter = { at: best, el: t.board[best].el, tier: t.board[best].tier }; t.board[best] = null; t.captures[owner]++; }
+  // 2. Element effect
+  if (stone.el === 'fire') {
+    const dur = tier === 1 ? 1 : 2, pts = tier === 3 ? ORTH[p].concat(DIAG[p]) : ORTH[p];
+    for (const q of pts) if (!t.board[q]) {
+      const cur = t.scorch[q];
+      if (!cur || cur.owner !== owner || cur.left < dur) { t.scorch[q] = { owner, left: dur }; ev.scorched++; }
+    }
+  } else if (stone.el === 'water') {
+    const reach = tier === 3 ? 2 : 1;
+    for (const [dx, dy] of DIRS) {
+      const n = stepD(p, dx, dy); if (n < 0) continue;
+      const c = t.board[n];
+      if (!c || c.owner !== opp || c.tier > tier) continue;
+      let cur = n;
+      for (let k = 0; k < reach; k++) { const nx = stepD(cur, dx, dy); if (nx < 0 || t.board[nx]) break; cur = nx; }
+      if (cur !== n) { t.board[cur] = c; t.board[n] = null; t.scorch[cur] = null; ev.pushed++; }
+    }
+  }
+  // 3. Captures
+  resolveCaptures(t, opp, owner, ev);
+  // 4. Legality: no suicide
+  const { groups, gid } = computeGroups(t, owner);
+  const g = groups[gid[p]];
+  if (!g || g.libs === 0) return { ok: false, why: 'That stone would have no liberties, so it can’t be played there.' };
+  for (const gg of groups) if (gg.libs > 0) for (const j of gg.stones) { const c = t.board[j]; if (c.el === 'earth') c.hp = c.tier; }
+  const sg = sig(t.board);
+  if (koSig && sg === koSig) return { ok: false, why: 'Ko: that would repeat the previous position. Play elsewhere first.' };
+  return { ok: true, s: t, ev, sig: sg };
+}
+
+function tickScorch(s, mover) {
+  for (let i = 0; i < NN; i++) {
+    const sc = s.scorch[i];
+    if (sc && sc.owner !== mover) { sc.left--; if (sc.left <= 0) s.scorch[i] = null; }
+    if (s.board[i]) s.scorch[i] = null;
+  }
+}
+
+function areaScore(s) {
+  const b = s.board, st = [0, 0], ter = [0, 0], own = new Int8Array(NN).fill(-1), seen = new Uint8Array(NN);
+  for (let i = 0; i < NN; i++) if (b[i]) st[b[i].owner]++;
+  for (let i = 0; i < NN; i++) {
+    if (b[i] || seen[i]) continue;
+    const region = [], stack = [i]; let mask = 0; seen[i] = 1;
+    while (stack.length) {
+      const j = stack.pop(); region.push(j);
+      for (const n of ORTH[j]) {
+        if (b[n]) mask |= (1 << b[n].owner);
+        else if (!seen[n]) { seen[n] = 1; stack.push(n); }
+      }
+    }
+    if (mask === 1 || mask === 2) { const o = mask === 1 ? 0 : 1; ter[o] += region.length; for (const j of region) own[j] = o; }
+  }
+  return { st, ter, own, total: [st[0] + ter[0], st[1] + ter[1] + KOMI] };
+}
+
+/* ============================== AI ============================== */
+// The same greedy one-move lookahead plays every level. Only the bag differs.
+function evaluate(s, me) {
+  const b = s.board, inf = new Float32Array(NN); let v = 0;
+  for (let i = 0; i < NN; i++) {
+    const c = b[i]; if (!c) continue;
+    const sg = c.owner === me ? 1 : -1; v += sg;
+    const near = NEAR[i];
+    for (let k = 0; k < near.length; k += 2) inf[near[k]] += sg * INFW[near[k + 1]];
+  }
+  for (let i = 0; i < NN; i++) if (!b[i]) { let x = inf[i] / 1.6; if (x > 1) x = 1; else if (x < -1) x = -1; v += x * 0.85; }
+  for (const side of [me, 1 - me]) {
+    const mine = side === me;
+    for (const g of computeGroups(s, side).groups) {
+      const n = g.stones.length;
+      if (g.libs === 0) v += mine ? -1.3 * n : 0.9 * n;
+      else if (g.libs === 1) v += mine ? -0.75 * n : 0.45 * n;
+      else if (g.libs === 2) v += mine ? -0.12 * n : 0.08 * n;
+    }
+  }
+  return v;
+}
+
+function aiChoose() {
+  const pile = m.piles[1], ko = koSig(), base = evaluate(m.s, 1);
+  const stonesOnBoard = m.s.board.reduce((n, c) => n + (c ? 1 : 0), 0);
+  let best = null; const seen = new Set();
+  pile.hand.forEach((st, hi) => {
+    const key = st.el + st.tier; if (seen.has(key)) return; seen.add(key);
+    for (let p = 0; p < NN; p++) {
+      if (m.s.board[p]) continue;
+      const r = applyMove(m.s, 1, st, p, ko); if (!r.ok) continue;
+      let v = evaluate(r.s, 1) + Math.random() * 0.3;
+      const x = X(p), y = Y(p);
+      if (stonesOnBoard < 14 && (x === 0 || y === 0 || x === N - 1 || y === N - 1)) v -= 0.6;
+      if (!best || v > best.v) best = { v, hi, p };
+    }
+  });
+  if (!best) return null;
+  const sc = areaScore(m.s), ahead = sc.total[1] > sc.total[0], gain = best.v - base;
+  if (m.passes === 1 && ahead && gain < 1.0) return null;
+  if (m.turn[1] >= 14 && gain < 0.35) return null;
+  return best;
+}
+
+/* ============================== match flow ============================== */
+function mkPile(bag) { const p = { draw: shuffle(bag.map(s => ({ ...s }))), discard: [], hand: [] }; refill(p); return p; }
+function refill(p) {
+  while (p.hand.length < HAND) {
+    if (!p.draw.length) { if (!p.discard.length) break; p.draw = shuffle(p.discard); p.discard = []; }
+    p.hand.push(p.draw.pop());
+  }
+}
+const koSig = () => m.history.length >= 2 ? m.history[m.history.length - 2] : null;
+const who = side => side === 0 ? 'You' : OPPONENTS[m.lv].name;
+const whose = side => side === 0 ? 'your' : `${OPPONENTS[m.lv].name}’s`;
+
+function addLog(side, text) { m.log.unshift({ side, text }); if (m.log.length > 60) m.log.pop(); }
+
+function evText(ev, side) {
+  const parts = [], plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
+  if (ev.shatter) parts.push(`shattered ${whose(1 - side)} ${ELEM[ev.shatter.el].name} ${ROMAN[ev.shatter.tier]}`);
+  if (ev.scorched) parts.push(`scorched ${plural(ev.scorched, 'point')}`);
+  if (ev.pushed) parts.push(`pushed ${plural(ev.pushed, 'stone')}`);
+  if (ev.captured) parts.push(`captured ${plural(ev.captured, 'stone')}`);
+  if (ev.cracked) parts.push(`${whose(1 - side)} surrounded group held on with Earth armor`);
+  return parts.length ? ': ' + parts.join(', ') : '';
+}
+
+function hasAnyLegal(side) {
+  const ko = koSig();
+  for (const st of m.piles[side].hand) for (let p = 0; p < NN; p++) if (!m.s.board[p] && applyMove(m.s, side, st, p, ko).ok) return true;
+  return false;
+}
+
+function diffFx(before, after, p) {
+  const apos = new Map(); after.board.forEach((c, i) => c && apos.set(c.id, i));
+  const removed = [], moved = [];
+  before.board.forEach((c, i) => {
+    if (!c) return;
+    if (!apos.has(c.id)) removed.push({ i, c });
+    else if (apos.get(c.id) !== i) moved.push({ id: c.id, from: i, to: apos.get(c.id) });
+  });
+  return { removed, moved, placed: p >= 0 && after.board[p] ? after.board[p].id : null };
+}
+
+function startMatch(lv) {
+  const opp = OPPONENTS[lv];
+  m = {
+    lv, s: { board: Array(NN).fill(null), scorch: Array(NN).fill(null), captures: [0, 0] },
+    toMove: 0, turn: [0, 0], passes: 0, history: [], log: [], over: false, result: null, last: null, fx: null,
+    piles: [mkPile(run.bag), mkPile(bagFrom(opp.mix))],
+  };
+  m.history.push(sig(m.s.board));
+  addLog(-1, `Match ${lv + 1} against ${opp.name} ${opp.title}. You play first. ${opp.name} gets ${KOMI} komi.`);
+  ui.sel = 0; ui.hover = -1; ui.passArm = 0;
+  screen = 'match'; renderAll(); startTurn();
+}
+
+function startTurn() {
+  if (!m || m.over) return;
+  if (m.turn[0] >= MAX_TURNS && m.turn[1] >= MAX_TURNS) return endMatch('turns');
+  const side = m.toMove;
+  if (m.turn[side] >= MAX_TURNS) { m.toMove = 1 - side; return startTurn(); }
+  if (!hasAnyLegal(side)) return doPass(side, true);
+  updateMatch();
+  if (side === 1) { clearTimeout(ui.aiTimer); ui.aiTimer = setTimeout(aiTurn, 650); }
+}
+
+function aiTurn() {
+  if (!m || m.over || m.toMove !== 1 || screen !== 'match') return;
+  const c = aiChoose();
+  if (!c) doPass(1, false); else commit(1, c.hi, c.p);
+}
+
+function commit(side, hi, p) {
+  const pile = m.piles[side], st = pile.hand[hi], before = m.s;
+  const r = applyMove(before, side, st, p, koSig());
+  if (!r.ok) return r;
+  m.s = r.s; tickScorch(m.s, side);
+  m.history.push(r.sig); m.passes = 0; m.turn[side]++;
+  pile.hand.splice(hi, 1); pile.discard.push(st); refill(pile);
+  m.fx = diffFx(before, m.s, p);
+  m.last = { p };
+  addLog(side, `${who(side)} played ${stoneName(st)} at ${coord(p)}${evText(r.ev, side)}.`);
+  if (side === 0) {
+    ui.hover = -1;
+    const same = pile.hand.findIndex(h => h.el === st.el && h.tier === st.tier);
+    ui.sel = same >= 0 ? same : 0;
+  }
+  m.toMove = 1 - side; startTurn();
+  return r;
+}
+
+function doPass(side, forced) {
+  const before = m.s, t = cloneS(m.s), ev = newEv();
+  resolveCaptures(t, 1 - side, side, ev); tickScorch(t, side);
+  m.s = t; m.fx = diffFx(before, t, -1); m.last = null;
+  m.passes++; m.turn[side]++; m.history.push(sig(t.board));
+  addLog(side, `${who(side)} ${forced ? 'had no legal move and passed' : 'passed'}${evText(ev, side)}.`);
+  ui.passArm = 0;
+  if (m.passes >= 2) return endMatch('passes');
+  m.toMove = 1 - side; startTurn();
+}
+
+function endMatch(reason) {
+  m.over = true; clearTimeout(ui.aiTimer);
+  const sc = areaScore(m.s), diff = sc.total[0] - sc.total[1], won = diff > 0, margin = Math.abs(diff);
+  const caps = m.s.captures[0];
+  const capGold = Math.floor(caps / 2);
+  const gold = won ? 12 + Math.min(12, Math.floor(margin)) + capGold : 6 + capGold;
+  m.result = { won, sc, margin, gold, caps, capGold, reason };
+  run.gold += gold; run.goldTotal += gold; run.captures += caps;
+  if (won) { run.cleared[m.lv] = true; run.wins++; } else { run.lives--; run.losses++; }
+  const rec = loadRecord(); const cleared = run.cleared.filter(Boolean).length;
+  if (cleared > rec.best) rec.best = cleared;
+  if (won && m.lv === 2) rec.runsWon++;
+  saveRecord(rec);
+  addLog(-1, `Match over (${reason === 'passes' ? 'both players passed' : 'turn limit reached'}). ${won ? 'You win' : OPPONENTS[m.lv].name + ' wins'} by ${margin}.`);
+  ui.hover = -1;
+  renderAll();
+}
+
+/* ============================== run / shop ============================== */
+function newRun() {
+  run = { level: 0, lives: LIVES, gold: 0, goldTotal: 0, bag: bagFrom({ 1: 4 }), cleared: [false, false, false], market: [], wins: 0, losses: 0, captures: 0 };
+  ui.shopSel = null; ui.flash = '';
+  startMatch(0);
+}
+function makeMarket() {
+  const w = MARKET_WEIGHTS[run.level];
+  run.market = Array.from({ length: 4 }, () => {
+    const r = Math.random(); const tier = r < w[0] ? 1 : r < w[0] + w[1] ? 2 : 3;
+    return newStone(EL_ORDER[rnd(4)], tier);
+  });
+}
+function afterMatch() {
+  const res = m.result;
+  if (res.won && m.lv === 2) { screen = 'end'; m = null; renderAll(); return; }
+  if (!res.won && run.lives <= 0) { screen = 'end'; m = null; renderAll(); return; }
+  if (res.won) run.level = m.lv + 1;
+  makeMarket(); ui.shopSel = null;
+  ui.flash = res.won ? `You earned ${res.gold} gold. Spend it before facing ${OPPONENTS[run.level].name}.` : `You earned ${res.gold} gold. Rework your bag and try ${OPPONENTS[run.level].name} again.`;
+  m = null; screen = 'shop'; renderAll();
+}
+
+function shopAct(act, el) {
+  const st = run.bag.find(s => s.uid === ui.shopSel);
+  if (act === 'up' && st && st.tier < 3 && run.gold >= PRICE.up[st.tier]) {
+    run.gold -= PRICE.up[st.tier]; st.tier++; ui.flash = `Carved it up to ${stoneName(st)}.`;
+  } else if (act === 'tx' && st && st.el !== el.dataset.el && run.gold >= PRICE.tx) {
+    run.gold -= PRICE.tx; st.el = el.dataset.el; ui.flash = `Transmuted it into ${stoneName(st)}.`;
+  } else if (act === 'rm' && st && run.bag.length > MIN_BAG && run.gold >= PRICE.rm) {
+    run.gold -= PRICE.rm; run.bag = run.bag.filter(s => s !== st); ui.shopSel = null; ui.flash = `Removed ${stoneName(st)} from your bag.`;
+  } else if (act === 'buy') {
+    const i = +el.dataset.i, o = run.market[i];
+    if (o && run.gold >= PRICE.buy[o.tier]) { run.gold -= PRICE.buy[o.tier]; run.bag.push(o); run.market[i] = null; ui.shopSel = o.uid; ui.flash = `Bought ${stoneName(o)}.`; }
+  } else if (act === 'reroll' && run.gold >= PRICE.reroll) {
+    run.gold -= PRICE.reroll; makeMarket(); ui.flash = 'The merchant laid out new stones.';
+  } else return;
+  renderAll();
+}
+
+/* ============================== SVG drawing ============================== */
+const M = 32, S = 42, BS = M * 2 + S * (N - 1);
+const px = i => M + X(i) * S, py = i => M + Y(i) * S;
+
+function glyph(el, col) {
+  const up = 'M0,-10.5 L7.4,2.5 L-7.4,2.5 Z', down = 'M0,3.5 L7.4,-9.5 L-7.4,-9.5 Z';
+  let d = el === 'fire' || el === 'air' ? up : down;
+  if (el === 'air') d += ' M-8.6,-4 L8.6,-4';
+  if (el === 'earth') d += ' M-8.6,-3 L8.6,-3';
+  return `<path d="${d}" fill="none" stroke="${col}" stroke-width="2.1" stroke-linejoin="round" stroke-linecap="round"/>`;
+}
+function pips(tier, col) {
+  const xs = [[], [0], [-3.4, 3.4], [-6, 0, 6]][tier];
+  return xs.map(x => `<circle cx="${x}" cy="10.5" r="1.9" fill="${col}"/>`).join('');
+}
+function stoneSVG(el, tier, owner, extra = '') {
+  const col = `var(--${el}-${owner === 0 ? 'l' : 'd'})`;
+  const fill = owner === 0 ? 'url(#g-ink)' : 'url(#g-bone)';
+  const edge = owner === 0 ? 'var(--ink)' : 'var(--bone-lo)';
+  return `<circle r="19" fill="${fill}" stroke="${edge}" stroke-width="1"/>` +
+    (tier === 3 ? `<circle r="16.2" fill="none" stroke="${col}" stroke-width="1.1" opacity=".75"/>` : '') +
+    glyph(el, col) + pips(tier, col) + extra;
+}
+const miniStone = (el, tier, owner, size) =>
+  `<svg viewBox="-21 -21 42 42" width="${size}" height="${size}" aria-hidden="true" focusable="false">${stoneSVG(el, tier, owner)}</svg>`;
+const glyphIcon = (el, size = 16) =>
+  `<svg viewBox="-11 -12 22 18" width="${size}" height="${size}" aria-hidden="true" focusable="false">${glyph(el, `var(--${el})`)}</svg>`;
+
+function boardStatic() {
+  let s = `<rect x="0" y="0" width="${BS}" height="${BS}" rx="8" fill="url(#g-wood)"/>`;
+  for (let k = 0; k < 17; k++) {
+    const y0 = 8 + k * 24 + (k % 3) * 4;
+    s += `<path d="M0 ${y0} C ${BS * 0.3} ${y0 - 8 + (k % 5) * 3}, ${BS * 0.62} ${y0 + 9 - (k % 4) * 3}, ${BS} ${y0 + 2}" fill="none" stroke="var(--grain)" stroke-width="${0.6 + (k % 3) * 0.45}" opacity=".2"/>`;
+  }
+  s += `<g stroke="var(--grid)" stroke-width="1" opacity=".85">`;
+  for (let i = 0; i < N; i++) {
+    const a = M + i * S, e = M + S * (N - 1);
+    s += `<line x1="${M}" y1="${a}" x2="${e}" y2="${a}"/><line x1="${a}" y1="${M}" x2="${a}" y2="${e}"/>`;
+  }
+  s += `</g>`;
+  for (const [x, y] of [[2, 2], [6, 2], [4, 4], [2, 6], [6, 6]]) s += `<circle cx="${M + x * S}" cy="${M + y * S}" r="3.2" fill="var(--grid)"/>`;
+  s += `<g font-family="IBM Plex Mono, ui-monospace, monospace" font-size="10.5" fill="var(--grid)" opacity=".8" text-anchor="middle">`;
+  for (let i = 0; i < N; i++) {
+    s += `<text x="${M + i * S}" y="${BS - 8}">${COLS[i]}</text>`;
+    s += `<text x="12" y="${M + i * S + 4}">${N - i}</text>`;
+  }
+  s += `</g>`;
+  return s;
+}
+
+/* ============================== rendering: shell ============================== */
+const $ = sel => document.querySelector(sel);
+const screenEl = $('#screen');
+
+function renderTop() {
+  let h = `<button class="brand" data-act="title" aria-label="Stones of the Four, back to title">${miniStone('fire', 2, 0, 26)}<span>Stones of the Four</span></button>`;
+  h += `<div class="runstat">`;
+  if (run && screen !== 'title' && screen !== 'end') {
+    h += `<span>Level <b class="num">${(m ? m.lv : run.level) + 1}</b> of 3</span>`;
+    h += `<span>Lives <span class="lives" aria-label="${run.lives} of ${LIVES} lives">${Array.from({ length: LIVES }, (_, i) => `<i class="${i < run.lives ? '' : 'lost'}"></i>`).join('')}</span></span>`;
+    h += `<span>Gold <b class="num">${run.gold}</b></span>`;
+  }
+  h += `<button class="btn small" data-act="rules">Rules</button></div>`;
+  $('#topbar').innerHTML = h;
+}
+
+function renderAll() {
+  renderTop();
+  if (screen === 'title') renderTitle();
+  else if (screen === 'match') { renderMatchShell(); updateMatch(); }
+  else if (screen === 'shop') renderShop();
+  else if (screen === 'end') renderEnd();
+}
+
+/* ============================== codex ============================== */
+function cycleSVG() {
+  const pos = { fire: [110, 28], air: [192, 110], earth: [110, 192], water: [28, 110] };
+  const order = ['fire', 'air', 'earth', 'water'];
+  let s = `<svg viewBox="0 0 220 220" role="img" aria-label="Fire beats Air, Air beats Earth, Earth beats Water, Water beats Fire">`;
+  s += `<defs><marker id="cyc" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" style="fill:var(--muted)"/></marker></defs>`;
+  order.forEach((el, i) => {
+    const a = pos[el], b = pos[order[(i + 1) % 4]];
+    const dx = b[0] - a[0], dy = b[1] - a[1], len = Math.hypot(dx, dy), ux = dx / len, uy = dy / len;
+    s += `<line x1="${a[0] + ux * 30}" y1="${a[1] + uy * 30}" x2="${b[0] - ux * 30}" y2="${b[1] - uy * 30}" stroke="var(--muted)" stroke-width="1.5" marker-end="url(#cyc)"/>`;
+  });
+  for (const el of order) {
+    const [x, y] = pos[el];
+    s += `<g transform="translate(${x},${y})">${stoneSVG(el, 1, 0)}</g>`;
+    s += `<text x="${x}" y="${y + (y > 150 ? -26 : 34)}" text-anchor="middle" font-size="11" font-weight="700" fill="var(--${el})" font-family="Atkinson Hyperlegible, system-ui, sans-serif">${ELEM[el].name}</text>`;
+  }
+  s += `<text x="110" y="114" text-anchor="middle" font-size="10" fill="var(--muted)" font-family="Atkinson Hyperlegible, system-ui, sans-serif">beats →</text></svg>`;
+  return s;
+}
+
+function codexHTML() {
+  const rows = EL_ORDER.map(el => `<tr><td class="elname"><span class="elcell">${miniStone(el, 2, 0, 28)}<span class="el-${el}">${ELEM[el].name}</span></span><div class="note">Beats ${ELEM[ELEM[el].beats].name}</div></td>${[1, 2, 3].map(t => `<td>${EFFECT[el][t]}</td>`).join('')}</tr>`).join('');
+  return `<div class="codex">
+    <div class="codex-grid">
+      <div>
+        <h3>A match</h3>
+        <ul>
+          <li>On your turn, pick one of the three stones in your hand and place it on an empty point. You then draw back up to three. When your bag runs out, your used stones are shuffled back in.</li>
+          <li>Stones that touch along the lines form a group. A group with no empty neighboring points (liberties) left is captured.</li>
+          <li>You can’t play a stone that would have no liberties, and you can’t retake a ko straight away.</li>
+          <li>Each side gets ${MAX_TURNS} turns. The match also ends when both players pass in a row.</li>
+          <li>Area scoring: your stones on the board plus the empty points only you surround. Your opponent plays second and gets ${KOMI} komi.</li>
+        </ul>
+      </div>
+      <figure class="cycle" style="margin:0">${cycleSVG()}</figure>
+    </div>
+    <div>
+      <h3>Clash</h3>
+      <p style="max-width:72ch">When you place a stone next to an enemy stone of the element it beats, and the enemy stone has a lower tier, that enemy stone shatters. One shatter per placement, and it counts as a capture. Tier I stones never shatter anything, and a stone is safe from anything of its own tier or lower. Tier pips under each glyph show the tier. Tier III stones also have an inner ring.</p>
+    </div>
+    <div>
+      <h3>Elements by tier</h3>
+      <div class="tablewrap"><table class="tiers"><thead><tr><th>Element</th><th>Tier I</th><th>Tier II</th><th>Tier III</th></tr></thead><tbody>${rows}</tbody></table></div>
+      <p class="note">Scorched points block the enemy and don’t count as their liberties. Pushed stones only slide into empty points. Earth armor comes back once the group has a liberty again. Air links count as real connections, so linked stones share liberties.</p>
+    </div>
+    <div>
+      <h3>The run</h3>
+      <ul>
+        <li>Beat three opponents in order. They all think the same way. The difference is the bag they bring.</li>
+        <li>You have ${LIVES} lives. Losing a match costs one, and you rematch the same opponent after visiting the Stonecutter.</li>
+        <li>A win pays 12 gold, plus your winning margin (up to 12), plus 1 for every 2 stones you captured. A loss pays 6 plus the same capture bonus.</li>
+        <li>At the Stonecutter: upgrade a stone (I→II ${PRICE.up[1]} gold, II→III ${PRICE.up[2]}), transmute its element (${PRICE.tx}), remove it (${PRICE.rm}), or buy new stones (${PRICE.buy[1]} / ${PRICE.buy[2]} / ${PRICE.buy[3]} by tier). Your bag can’t drop below ${MIN_BAG} stones.</li>
+      </ul>
+    </div>
+  </div>`;
+}
+function openCodex() { $('#codex-body').innerHTML = codexHTML(); $('#codex').hidden = false; $('#codex-close').focus(); }
+function closeCodex() { $('#codex').hidden = true; }
+
+/* ============================== title ============================== */
+function tierBar(bag) {
+  const c = [0, 0, 0, 0]; bag.forEach(s => c[s.tier]++);
+  return `<div class="tierbar" role="img" aria-label="${c[1]} tier I, ${c[2]} tier II, ${c[3]} tier III">${[1, 2, 3].map(t => c[t] ? `<span class="t${t}" style="width:${c[t] / bag.length * 100}%"></span>` : '').join('')}</div>`;
+}
+function bagSummary(bag) {
+  const c = [0, 0, 0, 0]; bag.forEach(s => c[s.tier]++);
+  return [1, 2, 3].filter(t => c[t]).map(t => `${c[t]}× tier ${ROMAN[t]}`).join(', ');
+}
+function heroBoard() {
+  const s = 44, o = 22, at = (x, y) => `translate(${o + x * s},${o + y * s})`;
+  let h = `<svg viewBox="0 0 220 220" role="img" aria-label="A corner of the board with elemental stones"><rect width="220" height="220" rx="10" fill="url(#g-wood)"/>`;
+  h += `<g stroke="var(--grid)" stroke-width="1" opacity=".85">`;
+  for (let i = 0; i < 5; i++) h += `<line x1="${o}" y1="${o + i * s}" x2="${o + 4 * s}" y2="${o + i * s}"/><line x1="${o + i * s}" y1="${o}" x2="${o + i * s}" y2="${o + 4 * s}"/>`;
+  h += `</g><circle cx="${o + 2 * s}" cy="${o + 2 * s}" r="3" fill="var(--grid)"/>`;
+  h += `<g transform="${at(1, 2)}"><circle r="13" fill="var(--ember)" opacity=".3"/></g><g transform="${at(2, 3)}"><circle r="13" fill="var(--ember)" opacity=".3"/></g>`;
+  const st = [[2, 2, 'fire', 2, 0], [3, 2, 'water', 1, 1], [1, 1, 'air', 3, 0], [3, 1, 'earth', 2, 1], [2, 1, 'earth', 1, 0], [3, 3, 'air', 2, 1]];
+  for (const [x, y, el, t, ow] of st) h += `<g transform="${at(x, y)} scale(1.05)">${stoneSVG(el, t, ow)}</g>`;
+  return h + `</svg>`;
+}
+function renderTitle() {
+  const rec = loadRecord();
+  const recText = rec.best || rec.runsWon ? `Your best: ${rec.best} of 3 opponents beaten${rec.runsWon ? `, ${rec.runsWon} completed run${rec.runsWon === 1 ? '' : 's'}` : ''}.` : 'Three opponents. Two lives. One bag of stones.';
+  screenEl.innerHTML = `
+  <section class="hero">
+    <div>
+      <p class="eyebrow">A roguelite of Go and the four elements</p>
+      <h1>Stones of the Four</h1>
+      <p class="lede">Draw Fire, Water, Earth and Air stones from your bag and play them on a 9×9 board. Each element bends the rules of Go in its own way, and each comes in three tiers. Beat three opponents in a row, and spend your winnings at the Stonecutter between matches.</p>
+      <div class="cta"><button class="btn primary" data-act="begin">Begin a run</button><button class="btn" data-act="rules">Read the rules</button></div>
+      <p class="record">${recText}</p>
+    </div>
+    <figure class="hero-board">${heroBoard()}</figure>
+  </section>
+  <div class="section-h"><h2>Your opponents</h2><p>Everyone plays the same way. Their bags get better.</p></div>
+  <div class="ladder">${OPPONENTS.map((o, i) => { const bag = bagFrom(o.mix); return `<article class="rung"><span class="lv">Level ${i + 1}</span><h3>${o.name} ${o.title}</h3><p>${o.blurb}</p><p class="num" style="font-size:.8rem">${bag.length} stones: ${bagSummary(bag)}</p>${tierBar(bag)}</article>`; }).join('')}</div>
+  <div class="tierkey" style="margin-top:10px"><span><i class="t1"></i>Tier I</span><span><i class="t2"></i>Tier II</span><span><i class="t3"></i>Tier III</span><span>You start with 16 tier I stones, four of each element.</span></div>
+  <div class="section-h"><h2>Rules</h2></div>
+  ${codexHTML()}`;
+}
+
+/* ============================== match rendering ============================== */
+function renderMatchShell() {
+  screenEl.innerHTML = `
+  <div class="match">
+    <div class="board-col">
+      <div class="opp-strip" id="opp"></div>
+      <div class="board-wrap">
+        <svg id="board" viewBox="0 0 ${BS} ${BS}" tabindex="0" role="img" aria-label="Go board, 9 by 9. Use arrow keys to move, Enter to place.">
+          ${boardStatic()}
+          <g id="L-terr"></g><g id="L-scorch"></g><g id="L-stones"></g><g id="L-fx"></g><g id="L-over"></g><g id="L-hit"></g>
+        </svg>
+      </div>
+      <div class="status" id="status" aria-live="polite"></div>
+      <div id="below"></div>
+    </div>
+    <aside class="side">
+      <div class="card" id="scorecard"></div>
+      <div class="card"><h3>Match log</h3><ul class="log" id="log"></ul></div>
+    </aside>
+  </div>`;
+  let hit = '';
+  for (let p = 0; p < NN; p++) hit += `<rect data-p="${p}" x="${px(p) - S / 2}" y="${py(p) - S / 2}" width="${S}" height="${S}" fill="transparent"/>`;
+  const L = $('#L-hit'); L.innerHTML = hit;
+  L.addEventListener('pointerdown', e => { ui.lastPointer = e.pointerType || 'mouse'; });
+  L.addEventListener('pointermove', e => {
+    if (e.pointerType !== 'mouse') return;
+    const p = +e.target.getAttribute('data-p');
+    if (!Number.isNaN(p) && p !== ui.hover) { ui.kbd = false; setHover(p); }
+  });
+  L.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse') setHover(-1); });
+  L.addEventListener('click', e => {
+    const p = +e.target.getAttribute('data-p'); if (Number.isNaN(p)) return;
+    ui.kbd = false;
+    if (ui.lastPointer === 'mouse' || ui.hover === p) tryPlace(p);
+    else { setHover(p); if (canAct() && ui.sel >= 0 && !m.s.board[p]) setStatus(statusFor(p) + ' <b>Tap again to place.</b>'); }
+  });
+  $('#board').addEventListener('keydown', onBoardKey);
+}
+
+const canAct = () => m && !m.over && m.toMove === 0;
+
+function tryPlace(p) {
+  if (!canAct()) return;
+  if (ui.sel < 0) { setStatus('Pick a stone from your hand first.'); return; }
+  const r = commit(0, ui.sel, p);
+  if (r && !r.ok) setStatus(`<span class="why">${r.why}</span>`);
+}
+
+function onBoardKey(e) {
+  const k = e.key; let c = ui.cursor;
+  if (k === 'ArrowLeft') c = X(c) > 0 ? c - 1 : c;
+  else if (k === 'ArrowRight') c = X(c) < N - 1 ? c + 1 : c;
+  else if (k === 'ArrowUp') c = Y(c) > 0 ? c - N : c;
+  else if (k === 'ArrowDown') c = Y(c) < N - 1 ? c + N : c;
+  else if (k === 'Enter' || k === ' ') { e.preventDefault(); tryPlace(ui.cursor); return; }
+  else return;
+  e.preventDefault(); ui.cursor = c; ui.kbd = true; setHover(c);
+}
+
+function setHover(p) { ui.hover = p; renderOverlay(); }
+function setStatus(html) { const el = $('#status'); if (el) el.innerHTML = html; }
+
+function defaultStatus() {
+  if (!m) return '';
+  if (m.over) return 'The match is over. Shaded squares show the territory each side surrounds.';
+  if (m.toMove === 1) return `<span class="thinking">${OPPONENTS[m.lv].name} is choosing a stone…</span>`;
+  const st = m.piles[0].hand[ui.sel];
+  if (!st) return 'Pick a stone from your hand.';
+  return `<b class="el-${st.el}">${stoneName(st)}</b>: ${EFFECT[st.el][st.tier]} ${clashText(st)}`;
+}
+
+function statusFor(p) {
+  const c = m.s.board[p];
+  if (c) {
+    const { groups, gid } = computeGroups(m.s, c.owner); const g = groups[gid[p]];
+    let t = `${c.owner === 0 ? 'Your' : OPPONENTS[m.lv].name + '’s'} <b class="el-${c.el}">${stoneName(c)}</b> at ${coord(p)}. Its group: ${g.stones.length} stone${g.stones.length === 1 ? '' : 's'}, ${g.libs} libert${g.libs === 1 ? 'y' : 'ies'}.`;
+    if (c.el === 'earth') t += ` Armor ${c.hp} of ${c.tier}.`;
+    return t;
+  }
+  const sc = m.s.scorch[p];
+  if (sc) return `${coord(p)} is scorched by ${sc.owner === 0 ? 'you' : OPPONENTS[m.lv].name} for ${sc.left} more turn${sc.left === 1 ? '' : 's'}.`;
+  return coord(p);
+}
+
+function renderOverlay() {
+  const L = $('#L-over'); if (!L) return;
+  let h = '';
+  const p = ui.hover;
+  if (p >= 0 && ui.kbd) h += `<rect x="${px(p) - 21}" y="${py(p) - 21}" width="42" height="42" rx="6" fill="none" stroke="var(--mark)" stroke-width="2"/>`;
+  if (p < 0 || !m) { L.innerHTML = h; setStatus(defaultStatus()); return; }
+  if (m.s.board[p] || m.over || m.toMove !== 0 || ui.sel < 0) { L.innerHTML = h; setStatus(m.s.board[p] || (m.s.scorch[p] && !m.over) ? statusFor(p) : defaultStatus()); return; }
+  const st = m.piles[0].hand[ui.sel];
+  const r = applyMove(m.s, 0, st, p, koSig());
+  if (!r.ok) {
+    h += `<g transform="translate(${px(p)},${py(p)})" opacity=".85"><path d="M-7,-7 L7,7 M7,-7 L-7,7" stroke="var(--danger)" stroke-width="3" stroke-linecap="round"/></g>`;
+    L.innerHTML = h; setStatus(`<span class="why">${r.why}</span>`); return;
+  }
+  const fx = diffFx(m.s, r.s, p);
+  for (let q = 0; q < NN; q++) {
+    const a = r.s.scorch[q], b = m.s.scorch[q];
+    if (a && a.owner === 0 && (!b || b.owner !== 0 || b.left < a.left)) h += `<circle cx="${px(q)}" cy="${py(q)}" r="13" fill="var(--ember)" opacity=".35" stroke="var(--fire-d)" stroke-dasharray="3 3"/>`;
+  }
+  for (const mv of fx.moved) {
+    const c = r.s.board[mv.to];
+    h += `<line x1="${px(mv.from)}" y1="${py(mv.from)}" x2="${px(mv.to)}" y2="${py(mv.to)}" stroke="var(--water-d)" stroke-width="3" marker-end="url(#arrow)"/>`;
+    h += `<g transform="translate(${px(mv.to)},${py(mv.to)})" class="ghost">${stoneSVG(c.el, c.tier, c.owner)}</g>`;
+  }
+  for (const rm of fx.removed) h += `<g transform="translate(${px(rm.i)},${py(rm.i)})"><circle r="20" fill="none" stroke="var(--danger)" stroke-width="2.5"/><path d="M-9,-9 L9,9 M9,-9 L-9,9" stroke="var(--danger)" stroke-width="3" stroke-linecap="round"/></g>`;
+  h += `<g transform="translate(${px(p)},${py(p)})" class="ghost">${stoneSVG(st.el, st.tier, 0)}</g>`;
+  L.innerHTML = h;
+  const parts = evText(r.ev, 0);
+  setStatus(`<b class="el-${st.el}">${stoneName(st)}</b> at ${coord(p)}${parts || ': no special effect here'}.`);
+}
+
+function updateMatch() {
+  if (!m || screen !== 'match' || !$('#L-stones')) return;
+  const opp = OPPONENTS[m.lv];
+  // opponent strip
+  const op = m.piles[1];
+  $('#opp').innerHTML = `${miniStone('earth', 3, 1, 34)}<div class="opp-id"><small>Level ${m.lv + 1}</small><b>${opp.name} ${opp.title}</b></div>
+    <div class="opp-hand"><span class="lbl">Their hand</span>${op.hand.map(s => `<span class="mini">${miniStone(s.el, s.tier, 1, 30)}<span>${ROMAN[s.tier]}</span></span>`).join('')}</div>`;
+  // groups for danger marks
+  const danger = new Map();
+  for (const side of [0, 1]) for (const g of computeGroups(m.s, side).groups) if (g.libs <= 1) for (const j of g.stones) danger.set(j, g.libs);
+  // stones
+  const fx = m.fx || { removed: [], moved: [], placed: null };
+  const movedTo = new Map(fx.moved.map(mv => [mv.to, mv.from]));
+  let h = '';
+  for (let p = 0; p < NN; p++) {
+    const c = m.s.board[p]; if (!c) continue;
+    let extra = '';
+    if (c.el === 'earth' && c.hp < c.tier) extra += `<path d="M-11,-12 L-4,-5 L-8,1 L-1,7 L-3,13" fill="none" stroke="var(--danger)" stroke-width="1.6" stroke-linecap="round"/>`;
+    let ring = '';
+    if (danger.get(p) === 0) ring = `<circle r="21.5" fill="none" stroke="var(--danger)" stroke-width="2.5" class="peril"/>`;
+    else if (danger.get(p) === 1) ring = `<circle r="21" fill="none" stroke="var(--danger)" stroke-width="1.4" stroke-dasharray="4 3" opacity=".8"/>`;
+    if (m.last && m.last.p === p) ring += `<circle r="22.5" fill="none" stroke="var(--mark)" stroke-width="2.2"/>`;
+    let inner = stoneSVG(c.el, c.tier, c.owner, extra) + ring;
+    if (fx.placed === c.id) inner = `<g class="drop">${inner}</g>`;
+    if (movedTo.has(p)) { const f = movedTo.get(p); inner = `<g class="slide" style="--dx:${px(f) - px(p)}px;--dy:${py(f) - py(p)}px">${inner}</g>`; }
+    h += `<g transform="translate(${px(p)},${py(p)})">${inner}</g>`;
+  }
+  $('#L-stones').innerHTML = h;
+  $('#L-fx').innerHTML = fx.removed.map(rm => `<g transform="translate(${px(rm.i)},${py(rm.i)})"><g class="vanish">${stoneSVG(rm.c.el, rm.c.tier, rm.c.owner)}</g></g>`).join('');
+  m.fx = null;
+  // scorch
+  let sh = '';
+  for (let p = 0; p < NN; p++) {
+    const sc = m.s.scorch[p]; if (!sc) continue;
+    sh += `<g transform="translate(${px(p)},${py(p)})"><circle r="14" fill="var(--ember)" opacity=".32"/><circle r="14" fill="none" stroke="${sc.owner === 0 ? 'var(--ink)' : 'var(--bone-hi)'}" stroke-width="1.4" stroke-dasharray="3 3"/>` +
+      `<path d="M0,-7 C4,-2 5,1 3,5 C1,8 -3,7 -4,4 C-5,1 -2,-1 -1,-4 C-1,-1 1,0 1,-2 Z" fill="var(--fire-d)" opacity=".9"/><text x="9" y="-6" font-size="9" font-family="IBM Plex Mono, monospace" fill="var(--grid)">${sc.left}</text></g>`;
+  }
+  $('#L-scorch').innerHTML = sh;
+  // territory at end
+  let th = '';
+  if (m.over && m.result) {
+    const own = m.result.sc.own;
+    for (let p = 0; p < NN; p++) if (own[p] >= 0 && !m.s.board[p]) th += `<rect x="${px(p) - 6}" y="${py(p) - 6}" width="12" height="12" rx="2" fill="${own[p] === 0 ? 'var(--ink)' : 'var(--bone-hi)'}" stroke="${own[p] === 0 ? 'var(--ink-hi)' : 'var(--bone-lo)'}" opacity=".85"/>`;
+  }
+  $('#L-terr').innerHTML = th;
+  // below board: hand or result
+  $('#below').innerHTML = m.over ? resultHTML() : handRowHTML();
+  // score card
+  const sc = areaScore(m.s);
+  $('#scorecard').innerHTML = `<h3>${m.over ? 'Final score' : 'Score right now'}</h3>
+    <div class="scoregrid">
+      <span></span><span class="h v">You</span><span class="h v">${opp.name}</span>
+      <span>Stones</span><span class="v num">${sc.st[0]}</span><span class="v num">${sc.st[1]}</span>
+      <span>Territory</span><span class="v num">${sc.ter[0]}</span><span class="v num">${sc.ter[1]}</span>
+      <span>Komi</span><span class="v num">0</span><span class="v num">${KOMI}</span>
+      <span class="tot">Total</span><span class="v num tot">${sc.total[0]}</span><span class="v num tot">${sc.total[1]}</span>
+      <span>Captures</span><span class="v num">${m.s.captures[0]}</span><span class="v num">${m.s.captures[1]}</span>
+      <span>Turns</span><span class="v num">${m.turn[0]}/${MAX_TURNS}</span><span class="v num">${m.turn[1]}/${MAX_TURNS}</span>
+      <span>Bag left</span><span class="v num">${m.piles[0].draw.length}</span><span class="v num">${m.piles[1].draw.length}</span>
+    </div>`;
+  $('#log').innerHTML = m.log.map(l => `<li class="${l.side < 0 ? 'sys' : 's' + l.side}">${l.text}</li>`).join('');
+  renderOverlay();
+}
+
+function handRowHTML() {
+  const pile = m.piles[0];
+  const cards = pile.hand.map((st, i) => `<button class="hcard${ui.sel === i ? ' on' : ''}" data-act="hand" data-i="${i}" aria-pressed="${ui.sel === i}">
+      <span class="hkey">${i + 1}</span>${miniStone(st.el, st.tier, 0, 44)}
+      <span class="hbody"><span class="hname el-${st.el}">${stoneName(st)}</span><span class="htext">${EFFECT[st.el][st.tier]}</span><span class="hbeat">${clashText(st)}</span></span>
+    </button>`).join('');
+  const armed = ui.passArm && Date.now() - ui.passArm < 4000;
+  return `<div class="hand-row"><div class="hand" role="group" aria-label="Your hand">${cards}</div>
+    <div class="passcol"><button class="btn ${armed ? 'warn' : ''}" data-act="pass" ${canAct() ? '' : 'disabled'}>${armed ? 'Confirm pass' : 'Pass'}</button></div></div>`;
+}
+
+function resultHTML() {
+  const r = m.result, opp = OPPONENTS[m.lv];
+  let next, label;
+  if (r.won && m.lv === 2) { next = 'to-end'; label = 'Finish the run'; }
+  else if (!r.won && run.lives <= 0) { next = 'to-end'; label = 'See how the run ended'; }
+  else { next = 'to-shop'; label = 'Visit the Stonecutter'; }
+  const head = r.won ? `You beat ${opp.name} by ${r.margin}` : `${opp.name} wins by ${r.margin}`;
+  const sub = r.won ? (m.lv === 2 ? 'That was the last opponent.' : `Next up: ${OPPONENTS[m.lv + 1].name} ${OPPONENTS[m.lv + 1].title}.`)
+    : (run.lives > 0 ? `You lose a life. ${run.lives} left, and you get a rematch.` : 'That was your last life.');
+  return `<div class="result" role="status"><h2>${head}</h2><p>${sub}</p>
+    <p class="gold">+${r.gold} gold <span class="meta" style="font-weight:400">(${r.won ? `12 for the win, ${Math.min(12, Math.floor(r.margin))} for the margin` : '6 for playing'}, ${r.capGold} for ${r.caps} captures)</span></p>
+    <div class="row"><button class="btn primary" data-act="${next}">${label}</button></div></div>`;
+}
+
+/* ============================== shop rendering ============================== */
+function pathHTML() {
+  return `<nav class="path" aria-label="Run progress">${OPPONENTS.map((o, i) => {
+    const cls = run.cleared[i] ? 'done' : i === run.level ? 'next' : '';
+    return (i ? '<span class="link"></span>' : '') + `<span class="node ${cls}"><span class="dot"></span><span><small>Level ${i + 1}${run.cleared[i] ? ' · beaten' : i === run.level ? ' · next' : ''}</small><b>${o.name}</b></span></span>`;
+  }).join('')}</nav>`;
+}
+function mixCounts(bag) { const c = {}; EL_ORDER.forEach(el => c[el] = [0, 0, 0, 0]); bag.forEach(s => c[s.el][s.tier]++); return c; }
+function mixTable(you, them, name) {
+  const a = mixCounts(you), b = mixCounts(them);
+  const cell = (n, sep) => `<td class="num${n ? '' : ' z'}${sep ? ' sep' : ''}">${n || '·'}</td>`;
+  return `<table class="mix"><thead><tr><th></th><th colspan="3">You</th><th colspan="3" class="sep">${name}</th></tr>
+    <tr><th></th>${['I', 'II', 'III'].map(t => `<th>${t}</th>`).join('')}${['I', 'II', 'III'].map((t, i) => `<th${i ? '' : ' class="sep"'}>${t}</th>`).join('')}</tr></thead>
+    <tbody>${EL_ORDER.map(el => `<tr><td><span class="elcell">${glyphIcon(el)}<span class="el-${el}">${ELEM[el].name}</span></span></td>${[1, 2, 3].map(t => cell(a[el][t])).join('')}${[1, 2, 3].map(t => cell(b[el][t], t === 1)).join('')}</tr>`).join('')}
+    <tr><td><b>Total</b></td><td colspan="3" class="num"><b>${you.length}</b></td><td colspan="3" class="num sep"><b>${them.length}</b></td></tr></tbody></table>`;
+}
+function benchHTML() {
+  const st = run.bag.find(s => s.uid === ui.shopSel);
+  if (!st) return `<p class="meta">Select a stone in your bag to upgrade, transmute or remove it.</p><p class="flash" aria-live="polite">${ui.flash}</p>`;
+  const up = st.tier < 3 ? PRICE.up[st.tier] : 0;
+  return `<div class="bench-top">${miniStone(st.el, st.tier, 0, 52)}<div><h3 class="el-${st.el}">${stoneName(st)}</h3><p class="meta">${EFFECT[st.el][st.tier]}</p></div></div>
+    ${st.tier < 3 ? `<p class="meta"><b>At tier ${ROMAN[st.tier + 1]}:</b> ${EFFECT[st.el][st.tier + 1]}</p>` : ''}
+    <div class="acts">
+      ${st.tier < 3 ? `<button class="btn primary small" data-act="up" ${run.gold >= up ? '' : 'disabled'}>Upgrade to ${ROMAN[st.tier + 1]} · ${up} gold</button>` : `<span class="meta">Already at the top tier.</span>`}
+      <button class="btn small" data-act="rm" ${run.gold >= PRICE.rm && run.bag.length > MIN_BAG ? '' : 'disabled'}>Remove · ${PRICE.rm} gold</button>
+    </div>
+    <div class="acts"><span class="meta" style="align-self:center">Transmute (${PRICE.tx} gold):</span>${EL_ORDER.filter(e => e !== st.el).map(e => `<button class="btn small" data-act="tx" data-el="${e}" ${run.gold >= PRICE.tx ? '' : 'disabled'}>${glyphIcon(e, 14)} ${ELEM[e].name}</button>`).join('')}</div>
+    ${run.bag.length <= MIN_BAG ? `<p class="meta">Your bag is at the minimum of ${MIN_BAG} stones.</p>` : ''}
+    <p class="flash" aria-live="polite">${ui.flash}</p>`;
+}
+function renderShop() {
+  const opp = OPPONENTS[run.level];
+  const bag = sortBag(run.bag);
+  const rows = EL_ORDER.map(el => {
+    const list = bag.filter(s => s.el === el);
+    return `<div class="bagrow"><span class="rowlbl el-${el}">${ELEM[el].name}</span>${list.length ? list.map(s => `<button class="chip${ui.shopSel === s.uid ? ' on' : ''}" data-act="sel" data-uid="${s.uid}" aria-pressed="${ui.shopSel === s.uid}" aria-label="${stoneName(s)}">${miniStone(s.el, s.tier, 0, 38)}</button>`).join('') : '<span class="meta">none</span>'}</div>`;
+  }).join('');
+  const offers = run.market.map((o, i) => o ? `<div class="offer"><div class="top">${miniStone(o.el, o.tier, 0, 40)}<b class="el-${o.el}">${stoneName(o)}</b></div><p>${EFFECT[o.el][o.tier]}</p>
+      <button class="btn small" data-act="buy" data-i="${i}" ${run.gold >= PRICE.buy[o.tier] ? '' : 'disabled'}>Buy · ${PRICE.buy[o.tier]} gold</button></div>`
+    : `<div class="offer empty">Sold</div>`).join('');
+  screenEl.innerHTML = `
+  ${pathHTML()}
+  <div class="shop-head"><h1>The Stonecutter</h1><p>You have <b class="num">${run.gold}</b> gold to spend before the next match.</p></div>
+  <div class="shop-grid">
+    <section class="panel">
+      <div class="panel-h"><h2>Your bag</h2><span class="meta">${run.bag.length} stones · you draw 3 at a time</span></div>
+      <div class="bag">${rows}</div>
+      <div class="bench">${benchHTML()}</div>
+    </section>
+    <div class="right-col">
+      <section class="panel">
+        <div class="panel-h"><h2>Next: ${opp.name} ${opp.title}</h2></div>
+        <p class="meta">${opp.blurb}</p>
+        ${mixTable(run.bag, bagFrom(opp.mix), opp.name)}
+        <button class="btn primary" data-act="go">Play ${opp.name}</button>
+      </section>
+      <section class="panel">
+        <div class="panel-h"><h2>Market</h2><button class="btn small" data-act="reroll" ${run.gold >= PRICE.reroll ? '' : 'disabled'}>New offers · ${PRICE.reroll} gold</button></div>
+        <div class="offers">${offers}</div>
+      </section>
+    </div>
+  </div>`;
+}
+
+/* ============================== end screen ============================== */
+function renderEnd() {
+  const won = run.cleared[2], cleared = run.cleared.filter(Boolean).length;
+  screenEl.innerHTML = `<div class="endcard">
+    <p class="eyebrow">${won ? 'Run complete' : 'Run over'}</p>
+    <h1>${won ? 'Ozu the Master yields.' : `Your run ends at level ${cleared + 1}.`}</h1>
+    <p class="lede">${won ? 'You beat all three opponents. The bag you built is below.' : `You beat ${cleared} of 3 opponents before running out of lives.`}</p>
+    <div class="stats">
+      <div class="stat"><small>Matches won</small><b>${run.wins}</b></div>
+      <div class="stat"><small>Matches lost</small><b>${run.losses}</b></div>
+      <div class="stat"><small>Captures</small><b>${run.captures}</b></div>
+      <div class="stat"><small>Gold earned</small><b>${run.goldTotal}</b></div>
+    </div>
+    <div class="panel"><div class="panel-h"><h2>Final bag</h2><span class="meta">${run.bag.length} stones</span></div>
+      <div class="bagrow">${sortBag(run.bag).map(s => miniStone(s.el, s.tier, 0, 34)).join('')}</div></div>
+    <div class="cta"><button class="btn primary" data-act="begin">Start a new run</button><button class="btn" data-act="title">Back to title</button></div>
+  </div>`;
+}
+
+/* ============================== events ============================== */
+document.addEventListener('click', e => {
+  const el = e.target.closest('[data-act]'); if (!el) return;
+  const act = el.dataset.act;
+  if (act === 'rules') return openCodex();
+  if (act === 'close-codex') return closeCodex();
+  if (act === 'begin') { closeCodex(); return newRun(); }
+  if (act === 'title') { clearTimeout(ui.aiTimer); screen = 'title'; m = null; if (run && (run.lives <= 0 || run.cleared[2])) run = null; return renderAll(); }
+  if (act === 'hand') { ui.sel = +el.dataset.i; return updateMatch(); }
+  if (act === 'pass') {
+    if (!canAct()) return;
+    if (ui.passArm && Date.now() - ui.passArm < 4000) return doPass(0, false);
+    ui.passArm = Date.now(); updateMatch(); setStatus('Passing ends the match if your opponent also passes. Press <b>Confirm pass</b> to pass.');
+    setTimeout(() => { if (ui.passArm && Date.now() - ui.passArm >= 4000) { ui.passArm = 0; if (canAct()) updateMatch(); } }, 4100);
+    return;
+  }
+  if (act === 'to-shop') return afterMatch();
+  if (act === 'to-end') return afterMatch();
+  if (act === 'sel') { ui.shopSel = +el.dataset.uid; ui.flash = ''; return renderAll(); }
+  if (act === 'go') { ui.flash = ''; return startMatch(run.level); }
+  if (['up', 'tx', 'rm', 'buy', 'reroll'].includes(act)) return shopAct(act, el);
+});
+$('#codex').addEventListener('click', e => { if (e.target.id === 'codex') closeCodex(); });
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && !$('#codex').hidden) { closeCodex(); return; }
+  if (screen !== 'match' || !m || m.over || !$('#codex').hidden) return;
+  if (e.target.closest && e.target.closest('input,textarea')) return;
+  if (['1', '2', '3'].includes(e.key)) { const i = +e.key - 1; if (i < m.piles[0].hand.length) { ui.sel = i; updateMatch(); } }
+});
+
+/* ============================== boot ============================== */
+window.claude?.hot?.snapshot?.(() => ({ run, m, screen, ids: { NEXT_ID, UID } }));
+function start(data) {
+  if (data && data.screen && data.run) {
+    run = data.run; m = data.m; screen = data.screen;
+    if (data.ids) { NEXT_ID = data.ids.NEXT_ID; UID = data.ids.UID; }
+    if (screen === 'match' && !m) screen = 'shop';
+    if (screen === 'shop' && !run.market.length) makeMarket();
+    renderAll();
+    if (screen === 'match' && m && !m.over && m.toMove === 1) ui.aiTimer = setTimeout(aiTurn, 650);
+    return;
+  }
+  screen = 'title'; renderAll();
+}
+window.claude?.hot?.ready ? window.claude.hot.ready(start) : start(window.claude?.hot?.data ?? {});
+</script>
+</body>
+</html>
